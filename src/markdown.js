@@ -167,7 +167,10 @@ export function parseMarkdownParagraphContent(markdown) {
 }
 
 export function parseMarkdownParagraph(markdown) {
-  return { type: "paragraph", content: parseMarkdownParagraphContent(markdown) };
+  return {
+    type: "paragraph",
+    content: parseMarkdownParagraphContent(markdown),
+  };
 }
 
 export function parseNext(markdown) {
@@ -235,7 +238,7 @@ export function parseLeadingLink(markdown) {
   const betweenBraces = markdown.slice(2, endingBracePos);
   const relativeDelimiterPos = betweenBraces.indexOf("|");
   if (relativeDelimiterPos === -1) {
-    return null;
+    return [null, markdown];
   }
 
   const caption = betweenBraces.slice(0, relativeDelimiterPos);
@@ -319,7 +322,9 @@ export function parseLeadingItalicText(markdown) {
     markdown,
     "*",
     (content) => {
-      return content.length > 0 ? { type: "italic", content: parseMarkdownParagraphContent(content) } : null;
+      return content.length > 0
+        ? { type: "italic", content: parseMarkdownParagraphContent(content) }
+        : null;
     },
     "*"
   );
@@ -330,7 +335,9 @@ export function parseLeadingBoldText(markdown) {
     markdown,
     "__",
     (content) => {
-      return content.length > 0 ? { type: "bold", content: parseMarkdownParagraphContent(content) } : null;
+      return content.length > 0
+        ? { type: "bold", content: parseMarkdownParagraphContent(content) }
+        : null;
     },
     "__"
   );

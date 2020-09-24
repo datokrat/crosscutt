@@ -183,4 +183,38 @@ describe("Markdown", () => {
       ],
     });
   });
+
+  it("table", () => {
+    assert.deepEqual(
+      parseMarkdownParagraph(
+        "| A | B | C |\n| --- | --- | --- |\n| a | b | c |"
+      ),
+      {
+        type: "paragraph",
+        content: [
+          {
+            type: "table",
+            rows: [
+              {
+                type: "header",
+                columns: [
+                  [{ type: "text", value: " A " }],
+                  [{ type: "text", value: " B " }],
+                  [{ type: "text", value: " C " }],
+                ],
+              },
+              {
+                type: "normal",
+                columns: [
+                  [{ type: "text", value: " a " }],
+                  [{ type: "text", value: " b " }],
+                  [{ type: "text", value: " c " }],
+                ],
+              },
+            ],
+          },
+        ],
+      }
+    );
+  });
 });
