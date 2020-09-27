@@ -6,22 +6,68 @@ export class DataSource {
   }
 
   loadArticlePreviews() {
-    return this.data.articles.map((article) => article.getPreview());
+    return immediatePromise(
+      this.data.articles.map((article) => article.getPreview())
+    );
   }
 
   loadArticle(id) {
     const foundArticle = this.data.articles.find(
       (article) => article.getId() === id
     );
-    return foundArticle !== undefined ? foundArticle : null;
+    return immediatePromise(foundArticle !== undefined ? foundArticle : null);
   }
 
   loadReference(id) {
     const foundReference = this.data.references.find(
       (reference) => reference.getId() === id
     );
-    return foundReference !== undefined ? foundReference : null;
+    return immediatePromise(
+      foundReference !== undefined ? foundReference : null
+    );
   }
+}
+
+export class RemoteDataSource {
+  loadArticlePreviews() {
+    return fetch("./api/get/previews", { method: "get" })
+      .then((response) => response.json())
+      .then((jsonData) => {
+        return jsonData.previews.map((previewData) =>
+          this.deserializePreview(previewData)
+        );
+      });
+  }
+
+  loadArticle(id) {
+    const url = new URL("api/get/article", location.href);
+    url.searchParams.append("title", id);
+    return fetch(url, { method: "get" })
+      .then((response) => response.json())
+      .then((jsonData) => {
+        return this.deserializeArticle(jsonData);
+      });
+  }
+
+  deserializePreview(data) {
+    return new ArticlePreview({
+      id: data.title,
+      title: data.title,
+      description: data.description,
+    });
+  }
+
+  deserializeArticle(data) {
+    return new Article({
+      id: data.title,
+      title: data.title,
+      text: data.text,
+    });
+  }
+}
+
+function immediatePromise(value) {
+  return new Promise((resolve) => resolve(value));
 }
 
 export class Article {

@@ -24106,26 +24106,36 @@ __webpack_require__.r(__webpack_exports__);
 class App {
   constructor(notify) {
     this.notify = notify;
-    this.dataSource = new _data_source__WEBPACK_IMPORTED_MODULE_0__["DataSource"]();
+    this.dataSource = new _data_source__WEBPACK_IMPORTED_MODULE_0__["RemoteDataSource"]();
 
-    this.blogList = new _list__WEBPACK_IMPORTED_MODULE_1__["BlogList"](this.dataSource);
+    this.blogList = new _list__WEBPACK_IMPORTED_MODULE_1__["BlogList"](this.notify, this.dataSource);
     this.articleDetail = new _detail__WEBPACK_IMPORTED_MODULE_2__["ArticleDetail"](this.notify, this.dataSource);
     this.referenceView = new _reference__WEBPACK_IMPORTED_MODULE_3__["ReferenceView"](this.notify, this.dataSource);
   }
 
   init(route) {
-    this.handle_route_change(route);
+    this.route = route;
+    this.getActiveView().start(this.getViewSpecificRoute());
+    this.notify();
   }
 
   render() {
     return this.getActiveView().render();
   }
 
-  // get_route() {
-  //   return this.getActiveView().get_route();
-  // }
+  getViewSpecificRoute() {
+    switch (this.getActiveView()) {
+      case this.articleDetail:
+        return this.route.slice("article/".length);
+      case this.referenceView:
+        return this.route.slice("reference/".length);
+      default:
+        return "";
+    }
+  }
 
   handle_route_change(new_route) {
+    this.oldView = this.getActiveView();
     this.route = new_route;
     if (this.getActiveView() === this.articleDetail) {
       this.articleDetail.handleRouteChange(this.route.slice(8));
@@ -24200,12 +24210,13 @@ function getSeed() {
 /*!****************************!*\
   !*** ./src/data-source.js ***!
   \****************************/
-/*! exports provided: DataSource, Article, ArticlePreview, EpubReference */
+/*! exports provided: DataSource, RemoteDataSource, Article, ArticlePreview, EpubReference */
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
 __webpack_require__.r(__webpack_exports__);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "DataSource", function() { return DataSource; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "RemoteDataSource", function() { return RemoteDataSource; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "Article", function() { return Article; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "ArticlePreview", function() { return ArticlePreview; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "EpubReference", function() { return EpubReference; });
@@ -24218,22 +24229,68 @@ class DataSource {
   }
 
   loadArticlePreviews() {
-    return this.data.articles.map((article) => article.getPreview());
+    return immediatePromise(
+      this.data.articles.map((article) => article.getPreview())
+    );
   }
 
   loadArticle(id) {
     const foundArticle = this.data.articles.find(
       (article) => article.getId() === id
     );
-    return foundArticle !== undefined ? foundArticle : null;
+    return immediatePromise(foundArticle !== undefined ? foundArticle : null);
   }
 
   loadReference(id) {
     const foundReference = this.data.references.find(
       (reference) => reference.getId() === id
     );
-    return foundReference !== undefined ? foundReference : null;
+    return immediatePromise(
+      foundReference !== undefined ? foundReference : null
+    );
   }
+}
+
+class RemoteDataSource {
+  loadArticlePreviews() {
+    return fetch("./api/get/previews", { method: "get" })
+      .then((response) => response.json())
+      .then((jsonData) => {
+        return jsonData.previews.map((previewData) =>
+          this.deserializePreview(previewData)
+        );
+      });
+  }
+
+  loadArticle(id) {
+    const url = new URL("api/get/article", location.href);
+    url.searchParams.append("title", id);
+    return fetch(url, { method: "get" })
+      .then((response) => response.json())
+      .then((jsonData) => {
+        return this.deserializeArticle(jsonData);
+      });
+  }
+
+  deserializePreview(data) {
+    return new ArticlePreview({
+      id: data.title,
+      title: data.title,
+      description: data.description,
+    });
+  }
+
+  deserializeArticle(data) {
+    return new Article({
+      id: data.title,
+      title: data.title,
+      text: data.text,
+    });
+  }
+}
+
+function immediatePromise(value) {
+  return new Promise((resolve) => resolve(value));
 }
 
 class Article {
@@ -24334,45 +24391,55 @@ class ArticleDetail {
     this.article = null;
     this.ast = null;
     this.collapsedSections = new Set();
+    this.stopped = false;
+  }
+
+  start(id) {
+    this.dataSource.loadArticle(id).then((article) => {
+      this.article = article;
+      this.ast = Object(_markdown__WEBPACK_IMPORTED_MODULE_3__["parseMarkdown"])(this.article.getText()).toJS();
+
+      const processSectionsIn = (astItem) => {
+        switch (astItem.type) {
+          case "section":
+            if (astItem.collapse) {
+              this.collapsedSections.add(astItem.name);
+            }
+            astItem.content.forEach((child) => processSectionsIn(child));
+            break;
+        }
+      };
+
+      this.ast.map((item) => processSectionsIn(item));
+      if (!this.stopped) {
+        this.notify();
+      }
+    });
+  }
+
+  stop() {
+    this.stopped = true;
   }
 
   render() {
     return Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])("div", [Object(_skeleton__WEBPACK_IMPORTED_MODULE_2__["renderNavigation"])(), this.renderArticle(this.article)]);
   }
 
-  get_route() {
-    return "article";
+  renderArticle() {
+    return this.article !== null
+      ? Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])("div.container", [
+          Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])("div.article.my-3", [
+            Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])("h4", [this.article.getTitle()]),
+            Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])("section", this.renderAST(this.ast)),
+          ]),
+        ])
+      : Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])("div.container", [
+          Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])("div.article.my-3", [Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])("span", ["Loading..."])]),
+        ]);
   }
 
-  handleRouteChange(id) {
-    this.article = this.dataSource.loadArticle(id);
-    this.ast = Object(_markdown__WEBPACK_IMPORTED_MODULE_3__["parseMarkdown"])(this.article.getText()).toJS();
-
-    const processSectionsIn = (astItem) => {
-      switch (astItem.type) {
-        case "section":
-          if (astItem.collapse) {
-            this.collapsedSections.add(astItem.name);
-          }
-          astItem.content.forEach((child) => processSectionsIn(child));
-          break;
-      }
-    };
-
-    this.ast.map((item) => processSectionsIn(item));
-  }
-
-  renderArticle(article) {
-    return Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])("div.container", [
-      Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])("div.article.my-3", [
-        Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])("h4", [article.getTitle()]),
-        Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])("section", this.renderAST()),
-      ]),
-    ]);
-  }
-
-  renderAST() {
-    return this.ast.map((item) => this.renderMarkdownItem(item));
+  renderAST(ast) {
+    return ast.map((item) => this.renderMarkdownItem(item));
   }
 
   renderMarkdownItem(item) {
@@ -24618,26 +24685,43 @@ __webpack_require__.r(__webpack_exports__);
 
 
 class BlogList {
-  constructor(dataSource) {
+  constructor(notify, dataSource) {
+    this.notify = notify;
     this.dataSource = dataSource;
+
+    this.previews = null;
+    this.stopped = false;
+  }
+
+  start() {
+    this.dataSource.loadArticlePreviews().then((previews) => {
+      this.previews = previews;
+      if (!this.stopped) {
+        this.notify();
+      }
+    });
+  }
+
+  stop() {
+    this.stopped = true;
   }
 
   render() {
-    return Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])("div", [
-      Object(_skeleton__WEBPACK_IMPORTED_MODULE_0__["renderNavigation"])(),
-      this.renderArticlePreviews(this.dataSource.loadArticlePreviews()),
-    ]);
+    return Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])("div", [Object(_skeleton__WEBPACK_IMPORTED_MODULE_0__["renderNavigation"])(), this.renderArticlePreviews()]);
   }
 
   get_route() {
     return "list";
   }
 
-  renderArticlePreviews(previews) {
-    const list = Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])(
-      "ul",
-      previews.map((preview) => this.renderArticlePreview(preview))
-    );
+  renderArticlePreviews() {
+    const list =
+      this.previews !== null
+        ? Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])(
+            "ul",
+            this.previews.map((preview) => this.renderArticlePreview(preview))
+          )
+        : Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])("span", ["Loading..."]);
 
     return Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])("div.container", [
       Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])("div.article-previews", [Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])("h1.my-3", ["Articles"]), list]),

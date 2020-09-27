@@ -2,26 +2,43 @@ import { renderNavigation } from "./skeleton";
 import { h } from "snabbdom/build/package/h";
 
 export class BlogList {
-  constructor(dataSource) {
+  constructor(notify, dataSource) {
+    this.notify = notify;
     this.dataSource = dataSource;
+
+    this.previews = null;
+    this.stopped = false;
+  }
+
+  start() {
+    this.dataSource.loadArticlePreviews().then((previews) => {
+      this.previews = previews;
+      if (!this.stopped) {
+        this.notify();
+      }
+    });
+  }
+
+  stop() {
+    this.stopped = true;
   }
 
   render() {
-    return h("div", [
-      renderNavigation(),
-      this.renderArticlePreviews(this.dataSource.loadArticlePreviews()),
-    ]);
+    return h("div", [renderNavigation(), this.renderArticlePreviews()]);
   }
 
   get_route() {
     return "list";
   }
 
-  renderArticlePreviews(previews) {
-    const list = h(
-      "ul",
-      previews.map((preview) => this.renderArticlePreview(preview))
-    );
+  renderArticlePreviews() {
+    const list =
+      this.previews !== null
+        ? h(
+            "ul",
+            this.previews.map((preview) => this.renderArticlePreview(preview))
+          )
+        : h("span", ["Loading..."]);
 
     return h("div.container", [
       h("div.article-previews", [h("h1.my-3", ["Articles"]), list]),

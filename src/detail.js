@@ -10,45 +10,55 @@ export class ArticleDetail {
     this.article = null;
     this.ast = null;
     this.collapsedSections = new Set();
+    this.stopped = false;
+  }
+
+  start(id) {
+    this.dataSource.loadArticle(id).then((article) => {
+      this.article = article;
+      this.ast = parseMarkdown(this.article.getText()).toJS();
+
+      const processSectionsIn = (astItem) => {
+        switch (astItem.type) {
+          case "section":
+            if (astItem.collapse) {
+              this.collapsedSections.add(astItem.name);
+            }
+            astItem.content.forEach((child) => processSectionsIn(child));
+            break;
+        }
+      };
+
+      this.ast.map((item) => processSectionsIn(item));
+      if (!this.stopped) {
+        this.notify();
+      }
+    });
+  }
+
+  stop() {
+    this.stopped = true;
   }
 
   render() {
     return h("div", [renderNavigation(), this.renderArticle(this.article)]);
   }
 
-  get_route() {
-    return "article";
+  renderArticle() {
+    return this.article !== null
+      ? h("div.container", [
+          h("div.article.my-3", [
+            h("h4", [this.article.getTitle()]),
+            h("section", this.renderAST(this.ast)),
+          ]),
+        ])
+      : h("div.container", [
+          h("div.article.my-3", [h("span", ["Loading..."])]),
+        ]);
   }
 
-  handleRouteChange(id) {
-    this.article = this.dataSource.loadArticle(id);
-    this.ast = parseMarkdown(this.article.getText()).toJS();
-
-    const processSectionsIn = (astItem) => {
-      switch (astItem.type) {
-        case "section":
-          if (astItem.collapse) {
-            this.collapsedSections.add(astItem.name);
-          }
-          astItem.content.forEach((child) => processSectionsIn(child));
-          break;
-      }
-    };
-
-    this.ast.map((item) => processSectionsIn(item));
-  }
-
-  renderArticle(article) {
-    return h("div.container", [
-      h("div.article.my-3", [
-        h("h4", [article.getTitle()]),
-        h("section", this.renderAST()),
-      ]),
-    ]);
-  }
-
-  renderAST() {
-    return this.ast.map((item) => this.renderMarkdownItem(item));
+  renderAST(ast) {
+    return ast.map((item) => this.renderMarkdownItem(item));
   }
 
   renderMarkdownItem(item) {

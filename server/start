@@ -1,0 +1,14 @@
+#!/bin/sh
+
+PROJECT_ROOT=`readlink -e \`dirname $0\`/..`
+
+echo "Preparing nginx.conf..."
+sed "s|ROOT|$PROJECT_ROOT|g" $PROJECT_ROOT/server/nginx.template.conf > $PROJECT_ROOT/server/nginx.generated.conf
+
+echo "Starting nginx..."
+sudo nginx -c $PROJECT_ROOT/server/nginx.generated.conf
+
+cd $PROJECT_ROOT/server
+
+echo "Starting Django... (after stopping, execute stop to stop nginx)"
+./manage.py runserver 63421

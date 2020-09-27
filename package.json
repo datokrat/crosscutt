@@ -14,7 +14,8 @@
     "raw-loader": "^4.0.1",
     "snabbdom": "^2.1.0",
     "webpack": "^4.44.2",
-    "webpack-cli": "^3.3.12"
+    "webpack-cli": "^3.3.12",
+    "xstream": "^11.13.0"
   },
   "dependencies": {
     "copy-webpack-plugin": "^6.1.0",
@@ -22,6 +23,6 @@
   },
   "scripts": {
     "build": "yarn run webpack",
-    "debug": "yarn build && http-server dist"
+    "debug": "yarn build && ./debug-client-server"
   }
 }

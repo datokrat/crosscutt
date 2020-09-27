@@ -1,4 +1,4 @@
-import { DataSource } from "./data-source";
+import { RemoteDataSource as DataSource } from "./data-source";
 import { BlogList } from "./list";
 import { ArticleDetail } from "./detail";
 import { ReferenceView } from "./reference";
@@ -8,24 +8,34 @@ export class App {
     this.notify = notify;
     this.dataSource = new DataSource();
 
-    this.blogList = new BlogList(this.dataSource);
+    this.blogList = new BlogList(this.notify, this.dataSource);
     this.articleDetail = new ArticleDetail(this.notify, this.dataSource);
     this.referenceView = new ReferenceView(this.notify, this.dataSource);
   }
 
   init(route) {
-    this.handle_route_change(route);
+    this.route = route;
+    this.getActiveView().start(this.getViewSpecificRoute());
+    this.notify();
   }
 
   render() {
     return this.getActiveView().render();
   }
 
-  // get_route() {
-  //   return this.getActiveView().get_route();
-  // }
+  getViewSpecificRoute() {
+    switch (this.getActiveView()) {
+      case this.articleDetail:
+        return this.route.slice("article/".length);
+      case this.referenceView:
+        return this.route.slice("reference/".length);
+      default:
+        return "";
+    }
+  }
 
   handle_route_change(new_route) {
+    this.oldView = this.getActiveView();
     this.route = new_route;
     if (this.getActiveView() === this.articleDetail) {
       this.articleDetail.handleRouteChange(this.route.slice(8));
