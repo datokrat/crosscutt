@@ -1,4 +1,4 @@
-node_modules
+/node_modules/
 *.swp
 *.swo
 *.bak
@@ -6,3 +6,4 @@ node_modules
 *.generated.conf
 db.sqlite3
 __pycache__
+/dist/
