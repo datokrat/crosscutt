@@ -5,7 +5,7 @@ import { propsModule } from "snabbdom/build/package/modules/props";
 import { datasetModule } from "snabbdom/build/package/modules/dataset";
 import { attributesModule } from "snabbdom/build/package/modules/attributes";
 
-import { DataSource } from "./data-source";
+import { RemoteDataSource as DataSource } from "./data-source";
 import { App } from "./app";
 
 const patch = init([

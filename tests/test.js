@@ -219,4 +219,11 @@ describe("Markdown", () => {
       ],
     });
   });
+
+  it("italic text with containing asterisk", () => {
+    assert.deepEqual(parseMarkdownParagraph("*\\**"), {
+      type: "paragraph",
+      content: [{ type: "italic", content: [{ type: "text", value: "*" }] }],
+    });
+  });
 });

@@ -136,13 +136,20 @@ function createSection(name, collapse, lines) {
 }
 
 export function parseMarkdownParagraphContent(markdown) {
+  const [item, rest] = parseParagraphContentUntil(markdown, /$/);
+  return item;
+}
+
+function parseParagraphContentUntil(markdown, predicateRegex) {
+  const startPredicateRegex = new RegExp("^" + predicateRegex.source, "");
+  let rest = markdown;
   const result = [];
   let lastItem = null;
   let i = 0;
-  while (markdown.length > 0 && i < 2000) {
+  while (rest.search(startPredicateRegex) === -1 && i < 2000) {
     ++i;
     let item;
-    [item, markdown] = parseNext(markdown);
+    [item, rest] = parseNext(rest, predicateRegex);
 
     if (lastItem !== null) {
       if (lastItem.type === "text" && item.type === "text") {
@@ -159,11 +166,15 @@ export function parseMarkdownParagraphContent(markdown) {
     }
   }
 
+  if (rest.search(startPredicateRegex) === -1) {
+    return [null, markdown];
+  }
+
   if (lastItem !== null) {
     result.push(lastItem);
   }
 
-  return result;
+  return [result, rest];
 }
 
 export function parseMarkdownParagraph(markdown) {
@@ -173,44 +184,47 @@ export function parseMarkdownParagraph(markdown) {
   };
 }
 
-export function parseNext(markdown) {
-  let [item, rest] = parseLeadingLink(markdown);
-  if (item !== null) {
-    return [item, rest];
-  }
-
-  [item, rest] = parseLeadingKatexBlockFormula(rest);
-  if (item !== null) {
-    return [item, rest];
-  }
-
-  [item, rest] = parseLeadingKatexInlineFormula(rest);
-  if (item !== null) {
-    return [item, rest];
-  }
-
-  [item, rest] = parseLeadingBoldText(rest);
-  if (item !== null) {
-    return [item, rest];
-  }
-
-  [item, rest] = parseLeadingItalicText(rest);
-  if (item !== null) {
-    return [item, rest];
-  }
-
-  return parseLeadingText(rest);
+export function parseNext(markdown, delimiterRegex) {
+  return parseOptions(markdown, paragraphParsers(delimiterRegex));
 }
 
-export function parseLeadingText(markdown) {
-  const endIndex = markdown.search(/(\[\[)|(\*)|(_)|(\$)|\\/g);
+function paragraphParsers(delimiterRegex) {
+  return List([
+    parseLeadingLink,
+    parseLeadingKatexBlockFormula,
+    parseLeadingKatexInlineFormula,
+    parseLeadingBoldText,
+    parseLeadingItalicText,
+    (markdown) => parseLeadingText(markdown, delimiterRegex),
+  ]);
+}
+
+function parseOptions(markdown, options) {
+  for (let i = 0; i < options.size; ++i) {
+    const [item, rest] = options.get(i)(markdown);
+    if (item !== null) {
+      return [item, rest];
+    }
+  }
+
+  return [null, markdown];
+}
+
+export function parseLeadingText(markdown, delimiterRegex) {
+  const additionalDelimiters =
+    delimiterRegex !== undefined ? "(" + delimiterRegex.source + ")|" : "";
+  const regex = new RegExp(
+    additionalDelimiters + "(\\[\\[)|(\\*)|(_)|(\\$)|\\\\",
+    ""
+  );
+  const endIndex = markdown.search(regex);
   if (markdown.length === 0) {
     return [null, markdown];
   }
   if (endIndex === -1) {
     return [{ type: "text", value: markdown }, ""];
   }
-  if (endIndex === 0 && markdown.startsWith("\\")) {
+  if (markdown.startsWith("\\")) {
     return markdown.length >= 2
       ? [{ type: "text", value: markdown.slice(1, 2) }, markdown.slice(2)]
       : [{ type: "text", value: "\\" }, ""];
@@ -280,6 +294,34 @@ function unescape(string) {
     .join("\\");
 }
 
+export function parseRichBetweenDelimiters(
+  markdown,
+  startDelimiter,
+  processContent,
+  endRegex
+) {
+  if (!markdown.startsWith(startDelimiter)) {
+    return [null, markdown];
+  }
+
+  const withoutStart = markdown.slice(startDelimiter.length);
+  const [content, restIncludingEnd] = parseParagraphContentUntil(
+    withoutStart,
+    endRegex
+  );
+
+  if (content !== null) {
+    const endMatch = restIncludingEnd.match(endRegex)[0];
+    const rest = restIncludingEnd.slice(endMatch.length);
+    const processedContent = processContent(content);
+    if (processedContent !== null) {
+      return [processedContent, rest];
+    }
+  }
+
+  return [null, markdown];
+}
+
 export function parseBetweenDelimiters(
   markdown,
   startDelimiter,
@@ -330,27 +372,23 @@ export function parseLeadingKatexInlineFormula(markdown) {
 }
 
 export function parseLeadingItalicText(markdown) {
-  return parseBetweenDelimiters(
+  return parseRichBetweenDelimiters(
     markdown,
     "*",
     (content) => {
-      return content.length > 0
-        ? { type: "italic", content: parseMarkdownParagraphContent(content) }
-        : null;
+      return content.length > 0 ? { type: "italic", content } : null;
     },
-    "*"
+    /\*/
   );
 }
 
 export function parseLeadingBoldText(markdown) {
-  return parseBetweenDelimiters(
+  return parseRichBetweenDelimiters(
     markdown,
     "__",
     (content) => {
-      return content.length > 0
-        ? { type: "bold", content: parseMarkdownParagraphContent(content) }
-        : null;
+      return content.length > 0 ? { type: "bold", content } : null;
     },
-    "__"
+    /__/
   );
 }
