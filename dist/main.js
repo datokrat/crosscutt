@@ -24094,23 +24094,21 @@ function vnode(sel, data, children, text, elm) {
 "use strict";
 __webpack_require__.r(__webpack_exports__);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "App", function() { return App; });
-/* harmony import */ var _data_source__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./data-source */ "./src/data-source.js");
-/* harmony import */ var _list__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./list */ "./src/list.js");
-/* harmony import */ var _detail__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ./detail */ "./src/detail.js");
-/* harmony import */ var _reference__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ./reference */ "./src/reference.js");
-
+/* harmony import */ var _list__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./list */ "./src/list.js");
+/* harmony import */ var _detail__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./detail */ "./src/detail.js");
+/* harmony import */ var _reference__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ./reference */ "./src/reference.js");
 
 
 
 
 class App {
-  constructor(notify) {
+  constructor(notify, { dataSource }) {
     this.notify = notify;
-    this.dataSource = new _data_source__WEBPACK_IMPORTED_MODULE_0__["RemoteDataSource"]();
+    this.dataSource = dataSource;
 
-    this.blogList = new _list__WEBPACK_IMPORTED_MODULE_1__["BlogList"](this.notify, this.dataSource);
-    this.articleDetail = new _detail__WEBPACK_IMPORTED_MODULE_2__["ArticleDetail"](this.notify, this.dataSource);
-    this.referenceView = new _reference__WEBPACK_IMPORTED_MODULE_3__["ReferenceView"](this.notify, this.dataSource);
+    this.blogList = new _list__WEBPACK_IMPORTED_MODULE_0__["BlogList"](this.notify, this.dataSource);
+    this.articleDetail = new _detail__WEBPACK_IMPORTED_MODULE_1__["ArticleDetail"](this.notify, this.dataSource);
+    this.referenceView = new _reference__WEBPACK_IMPORTED_MODULE_2__["ReferenceView"](this.notify, this.dataSource);
   }
 
   init(route) {
@@ -24228,6 +24226,10 @@ class DataSource {
     this.data = Object(_data_seed__WEBPACK_IMPORTED_MODULE_0__["getSeed"])();
   }
 
+  isReadOnly() {
+    return true;
+  }
+
   loadArticlePreviews() {
     return immediatePromise(
       this.data.articles.map((article) => article.getPreview())
@@ -24252,6 +24254,10 @@ class DataSource {
 }
 
 class RemoteDataSource {
+  isReadOnly() {
+    return false;
+  }
+
   loadArticlePreviews() {
     return fetch("./api/get/previews/", { method: "get" })
       .then((response) => response.json())
@@ -24436,6 +24442,12 @@ class ArticleDetail {
         // if article already exists, edit
         this.setArticle(article);
       } else {
+        if (this.dataSource.isReadOnly()) {
+          throw new Error(
+            "data source is read-only and article does not exist"
+          );
+        }
+
         // if article does not exist yet, create
         this.isCreating = true;
         this.setArticle(
@@ -24476,6 +24488,10 @@ class ArticleDetail {
   }
 
   edit() {
+    if (this.dataSource.isReadOnly()) {
+      throw new Error("data source is read-only");
+    }
+
     this.isEditing = true;
     this.editedText = this.article.getText();
     this.editedTitle = this.article.getTitle();
@@ -24540,6 +24556,10 @@ class ArticleDetail {
   }
 
   save() {
+    if (this.dataSource.isReadOnly()) {
+      throw new Error("data source is read-only");
+    }
+
     this.isSaving = true;
     this.notify();
 
@@ -24644,6 +24664,10 @@ class ArticleDetail {
   }
 
   renderNormalViewToolbar() {
+    if (this.dataSource.isReadOnly()) {
+      return null;
+    }
+
     return Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])("span.button-edit", [
       Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])(
         "button.btn.btn-secondary.float-right",
@@ -24654,6 +24678,10 @@ class ArticleDetail {
   }
 
   renderEditingToolbar() {
+    if (this.dataSource.isReadOnly()) {
+      return null;
+    }
+
     return Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])("span.button-save.float-right", [
       !this.isSaving
         ? !this.isSaved()
@@ -24884,7 +24912,9 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var snabbdom_build_package_modules_props__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! snabbdom/build/package/modules/props */ "./node_modules/snabbdom/build/package/modules/props.js");
 /* harmony import */ var snabbdom_build_package_modules_dataset__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! snabbdom/build/package/modules/dataset */ "./node_modules/snabbdom/build/package/modules/dataset.js");
 /* harmony import */ var snabbdom_build_package_modules_attributes__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! snabbdom/build/package/modules/attributes */ "./node_modules/snabbdom/build/package/modules/attributes.js");
-/* harmony import */ var _app__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ./app */ "./src/app.js");
+/* harmony import */ var _data_source__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ./data-source */ "./src/data-source.js");
+/* harmony import */ var _app__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ./app */ "./src/app.js");
+
 
 
 
@@ -24904,24 +24934,16 @@ const patch = Object(snabbdom_build_package_init__WEBPACK_IMPORTED_MODULE_0__["i
 
 let vdom = null;
 
-const app = new _app__WEBPACK_IMPORTED_MODULE_6__["App"](() => {
-  const new_vdom = app.render();
-  // const new_route = app.get_route();
-
-  apply_new_vdom(new_vdom);
-  // apply_new_route(new_route);
-});
+const app = new _app__WEBPACK_IMPORTED_MODULE_7__["App"](
+  () => {
+    apply_new_vdom(app.render());
+  },
+  { dataSource: new _data_source__WEBPACK_IMPORTED_MODULE_6__["DataSource"]() }
+);
 
 window.addEventListener("load", () => {
   app.init(get_route_from_location());
 });
-//window.addEventListener("hashchange", () => {
-//  const new_route = get_route_from_location();
-//
-//  if (app.get_route() !== new_route) {
-//    app.handle_route_change(new_route);
-//  }
-//});
 
 function apply_new_vdom(new_vdom) {
   vdom = patch(

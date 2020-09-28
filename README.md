@@ -30,9 +30,26 @@ yarn build
 
 ## Creating Content
 
+To find out how you can use CrossCutt with a Django backend, see below.
+
 Please take a look at the file  [`data-seed.js`](./src/data-seed.js). Write your articles into an `article-*.txt` file and `import` it at the beginning of `data-seed.js`. Then add a new `Article` object to the list of articles.
 
 It is also possible to include resources/"references" such as EPUB files. These may be added as `EpubReference` objects to the list of `references` and will be available under the URL `[root]/?reference/[ID of reference]`.
+
+## Configuring a backend
+
+Per default, CrossCutt is serverless and all articles are served statically,
+in the same way as articles served by a static page builder.
+
+It is, however, possible to configure a backend. Just change the following line in `src/index.js`
+```js
+import { DataSource } from "./data-source";
+```
+to
+```js
+import { RemoteDataSource as DataSource } from "./data-source";
+```
+and use the Django server in the `server` directory.
 
 ### Markdown features
 

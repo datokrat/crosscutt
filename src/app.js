@@ -1,12 +1,11 @@
-import { RemoteDataSource as DataSource } from "./data-source";
 import { BlogList } from "./list";
 import { ArticleDetail } from "./detail";
 import { ReferenceView } from "./reference";
 
 export class App {
-  constructor(notify) {
+  constructor(notify, { dataSource }) {
     this.notify = notify;
-    this.dataSource = new DataSource();
+    this.dataSource = dataSource;
 
     this.blogList = new BlogList(this.notify, this.dataSource);
     this.articleDetail = new ArticleDetail(this.notify, this.dataSource);

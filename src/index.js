@@ -5,6 +5,7 @@ import { propsModule } from "snabbdom/build/package/modules/props";
 import { datasetModule } from "snabbdom/build/package/modules/dataset";
 import { attributesModule } from "snabbdom/build/package/modules/attributes";
 
+import { DataSource } from "./data-source";
 import { App } from "./app";
 
 const patch = init([
@@ -17,24 +18,16 @@ const patch = init([
 
 let vdom = null;
 
-const app = new App(() => {
-  const new_vdom = app.render();
-  // const new_route = app.get_route();
-
-  apply_new_vdom(new_vdom);
-  // apply_new_route(new_route);
-});
+const app = new App(
+  () => {
+    apply_new_vdom(app.render());
+  },
+  { dataSource: new DataSource() }
+);
 
 window.addEventListener("load", () => {
   app.init(get_route_from_location());
 });
-//window.addEventListener("hashchange", () => {
-//  const new_route = get_route_from_location();
-//
-//  if (app.get_route() !== new_route) {
-//    app.handle_route_change(new_route);
-//  }
-//});
 
 function apply_new_vdom(new_vdom) {
   vdom = patch(

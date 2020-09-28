@@ -31,6 +31,12 @@ export class ArticleDetail {
         // if article already exists, edit
         this.setArticle(article);
       } else {
+        if (this.dataSource.isReadOnly()) {
+          throw new Error(
+            "data source is read-only and article does not exist"
+          );
+        }
+
         // if article does not exist yet, create
         this.isCreating = true;
         this.setArticle(
@@ -71,6 +77,10 @@ export class ArticleDetail {
   }
 
   edit() {
+    if (this.dataSource.isReadOnly()) {
+      throw new Error("data source is read-only");
+    }
+
     this.isEditing = true;
     this.editedText = this.article.getText();
     this.editedTitle = this.article.getTitle();
@@ -135,6 +145,10 @@ export class ArticleDetail {
   }
 
   save() {
+    if (this.dataSource.isReadOnly()) {
+      throw new Error("data source is read-only");
+    }
+
     this.isSaving = true;
     this.notify();
 
@@ -239,6 +253,10 @@ export class ArticleDetail {
   }
 
   renderNormalViewToolbar() {
+    if (this.dataSource.isReadOnly()) {
+      return null;
+    }
+
     return h("span.button-edit", [
       h(
         "button.btn.btn-secondary.float-right",
@@ -249,6 +267,10 @@ export class ArticleDetail {
   }
 
   renderEditingToolbar() {
+    if (this.dataSource.isReadOnly()) {
+      return null;
+    }
+
     return h("span.button-save.float-right", [
       !this.isSaving
         ? !this.isSaved()

@@ -23,6 +23,7 @@
   },
   "scripts": {
     "build": "yarn run webpack",
-    "debug": "yarn build && ./debug-client-server"
+    "debug": "yarn build && http-server dist",
+    "debug-server": "yarn build && ./debug-client-server"
   }
 }

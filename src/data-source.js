@@ -5,6 +5,10 @@ export class DataSource {
     this.data = getSeed();
   }
 
+  isReadOnly() {
+    return true;
+  }
+
   loadArticlePreviews() {
     return immediatePromise(
       this.data.articles.map((article) => article.getPreview())
@@ -29,6 +33,10 @@ export class DataSource {
 }
 
 export class RemoteDataSource {
+  isReadOnly() {
+    return false;
+  }
+
   loadArticlePreviews() {
     return fetch("./api/get/previews/", { method: "get" })
       .then((response) => response.json())
