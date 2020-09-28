@@ -24282,6 +24282,15 @@ class RemoteDataSource {
     return fetch(url, { method: "get" }).then((response) => response.json());
   }
 
+  createArticle(article) {
+    const url = new URL("api/create/article/", location.href);
+    url.searchParams.append("id", article.getId());
+    url.searchParams.append("title", article.getTitle());
+    url.searchParams.append("text", article.getText());
+
+    return fetch(url, { method: "get" }).then((response) => response.json());
+  }
+
   deserializePreview(data) {
     return new ArticlePreview({
       id: data.id,
@@ -24291,11 +24300,15 @@ class RemoteDataSource {
   }
 
   deserializeArticle(data) {
-    return new Article({
-      id: data.id,
-      title: data.title,
-      text: data.text,
-    });
+    if (data.success) {
+      return new Article({
+        id: data.id,
+        title: data.title,
+        text: data.text,
+      });
+    } else {
+      return null;
+    }
   }
 }
 
@@ -24405,9 +24418,12 @@ class ArticleDetail {
     this.ast = null;
     this.collapsedSections = new Set();
 
+    this.isCreating = false;
     this.willRefreshMarkup = false;
     this.isEditing = false;
+    this.savedTitle = null;
     this.savedText = null;
+    this.editedTitle = null;
     this.editedText = null;
     this.isSaving = false;
     this.stopped = false;
@@ -24416,7 +24432,21 @@ class ArticleDetail {
   start(id) {
     this.articleId = id;
     this.dataSource.loadArticle(id).then((article) => {
-      this.setArticle(article);
+      if (article !== null) {
+        // if article already exists, edit
+        this.setArticle(article);
+      } else {
+        // if article does not exist yet, create
+        this.isCreating = true;
+        this.setArticle(
+          new _data_source__WEBPACK_IMPORTED_MODULE_4__["Article"]({
+            id: id,
+            title: "",
+            text: "",
+          })
+        );
+        this.edit();
+      }
     });
   }
 
@@ -24448,20 +24478,28 @@ class ArticleDetail {
   edit() {
     this.isEditing = true;
     this.editedText = this.article.getText();
+    this.editedTitle = this.article.getTitle();
+    this.savedTitle = this.article.getTitle();
     this.savedText = this.article.getText();
     this.notify();
   }
 
   abortEditing() {
+    if (this.isCreating) {
+      return;
+    }
+
     if (this.isSaved() || confirm("You have unsaved changes. Really abort?")) {
       this.isEditing = false;
+      const title = this.savedTitle;
       const text = this.savedText;
+      this.editedTitle = null;
       this.editedText = null;
       this.savedText = null;
       this.setArticle(
         new _data_source__WEBPACK_IMPORTED_MODULE_4__["Article"]({
           id: this.article.getId(),
-          title: this.article.getTitle(),
+          title: title,
           text: text,
         })
       );
@@ -24469,17 +24507,25 @@ class ArticleDetail {
     }
   }
 
+  changeEditedTitle(title) {
+    this.editedTitle = title;
+    this.onEditedFieldsChanged();
+  }
+
   changeEditedText(text) {
     this.editedText = text;
+    this.onEditedFieldsChanged();
+  }
 
+  onEditedFieldsChanged() {
     if (!this.willRefreshMarkup) {
       this.willRefreshMarkup = true;
       setTimeout(() => {
         this.willRefreshMarkup = false;
         this.setArticle(
           new _data_source__WEBPACK_IMPORTED_MODULE_4__["Article"]({
-            id: this.article.id,
-            title: this.article.title,
+            id: this.article.getId(),
+            title: this.editedTitle,
             text: this.editedText,
           })
         );
@@ -24488,7 +24534,9 @@ class ArticleDetail {
   }
 
   isSaved() {
-    return this.savedText === this.editedText;
+    return (
+      this.savedText === this.editedText && this.savedTitle === this.editedTitle
+    );
   }
 
   save() {
@@ -24496,15 +24544,31 @@ class ArticleDetail {
     this.notify();
 
     const newArticleId = this.article.getId();
+    const newTitle = this.article.getTitle();
     const newText = this.article.getText();
-    this.dataSource.saveArticle(this.articleId, this.article).then(() => {
-      this.isSaving = false;
-      this.savedText = newText;
-      this.articleId = newArticleId;
-      if (!this.stopped) {
-        this.notify();
-      }
-    });
+
+    if (!this.isCreating) {
+      this.dataSource.saveArticle(this.articleId, this.article).then(() => {
+        this.isSaving = false;
+        this.savedTitle = newTitle;
+        this.savedText = newText;
+        this.articleId = newArticleId;
+        if (!this.stopped) {
+          this.notify();
+        }
+      });
+    } else {
+      this.dataSource.createArticle(this.article).then(() => {
+        this.isSaving = false;
+        this.isCreating = false;
+        this.savedTitle = newTitle;
+        this.savedText = newText;
+        this.articleId = newArticleId;
+        if (!this.stopped) {
+          this.notify();
+        }
+      });
+    }
   }
 
   render() {
@@ -24532,11 +24596,24 @@ class ArticleDetail {
           Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])("div.col-sm.col-sm-6", [
             Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])("div.form-group", [
               Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])(
+                "input.form-control",
+                {
+                  on: { input: (e) => this.changeEditedTitle(e.target.value) },
+                  props: {
+                    type: "text",
+                    placeholder: "Title",
+                    value: this.editedTitle,
+                  },
+                },
+                []
+              ),
+              Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])(
                 "textarea.form-control",
                 {
                   on: {
                     input: (e) => this.changeEditedText(e.target.value),
                   },
+                  props: { placeholder: "Text" },
                 },
                 [this.editedText]
               ),
@@ -24620,6 +24697,10 @@ class ArticleDetail {
   }
 
   renderAbortButton() {
+    if (this.isCreating) {
+      return null;
+    }
+
     const isDisabled = this.isSaving;
     const on = isDisabled ? {} : { click: () => this.abortEditing() };
     return Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])(

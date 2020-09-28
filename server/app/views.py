@@ -7,12 +7,19 @@ def get_previews(request):
 
 def get_article(request):
     id = request.GET["id"]
-    article = Article.objects.get(article_id=id)
-    return JsonResponse({
-        "id": article.article_id,
-        "title": article.title,
-        "text": article.text,
-    })
+    queryset = Article.objects.filter(article_id=id)
+    if queryset.exists():
+        article = queryset.get()
+        return JsonResponse({
+            "success": True,
+            "id": article.article_id,
+            "title": article.title,
+            "text": article.text,
+        })
+    else:
+        return JsonResponse({
+            "success": False,
+        })
 
 def create_article(request):
     id = request.GET["id"]
@@ -25,6 +32,10 @@ def create_article(request):
     article = Article(article_id=id, title=title, text=text)
     article.full_clean()
     article.save()
+
+    return JsonResponse({
+        "success": True,
+    })
 
 def change_article(request):
     id = request.GET["id"]

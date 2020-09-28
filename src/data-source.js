@@ -59,6 +59,15 @@ export class RemoteDataSource {
     return fetch(url, { method: "get" }).then((response) => response.json());
   }
 
+  createArticle(article) {
+    const url = new URL("api/create/article/", location.href);
+    url.searchParams.append("id", article.getId());
+    url.searchParams.append("title", article.getTitle());
+    url.searchParams.append("text", article.getText());
+
+    return fetch(url, { method: "get" }).then((response) => response.json());
+  }
+
   deserializePreview(data) {
     return new ArticlePreview({
       id: data.id,
@@ -68,11 +77,15 @@ export class RemoteDataSource {
   }
 
   deserializeArticle(data) {
-    return new Article({
-      id: data.id,
-      title: data.title,
-      text: data.text,
-    });
+    if (data.success) {
+      return new Article({
+        id: data.id,
+        title: data.title,
+        text: data.text,
+      });
+    } else {
+      return null;
+    }
   }
 }
 

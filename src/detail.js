@@ -13,9 +13,12 @@ export class ArticleDetail {
     this.ast = null;
     this.collapsedSections = new Set();
 
+    this.isCreating = false;
     this.willRefreshMarkup = false;
     this.isEditing = false;
+    this.savedTitle = null;
     this.savedText = null;
+    this.editedTitle = null;
     this.editedText = null;
     this.isSaving = false;
     this.stopped = false;
@@ -24,7 +27,21 @@ export class ArticleDetail {
   start(id) {
     this.articleId = id;
     this.dataSource.loadArticle(id).then((article) => {
-      this.setArticle(article);
+      if (article !== null) {
+        // if article already exists, edit
+        this.setArticle(article);
+      } else {
+        // if article does not exist yet, create
+        this.isCreating = true;
+        this.setArticle(
+          new Article({
+            id: id,
+            title: "",
+            text: "",
+          })
+        );
+        this.edit();
+      }
     });
   }
 
@@ -56,20 +73,28 @@ export class ArticleDetail {
   edit() {
     this.isEditing = true;
     this.editedText = this.article.getText();
+    this.editedTitle = this.article.getTitle();
+    this.savedTitle = this.article.getTitle();
     this.savedText = this.article.getText();
     this.notify();
   }
 
   abortEditing() {
+    if (this.isCreating) {
+      return;
+    }
+
     if (this.isSaved() || confirm("You have unsaved changes. Really abort?")) {
       this.isEditing = false;
+      const title = this.savedTitle;
       const text = this.savedText;
+      this.editedTitle = null;
       this.editedText = null;
       this.savedText = null;
       this.setArticle(
         new Article({
           id: this.article.getId(),
-          title: this.article.getTitle(),
+          title: title,
           text: text,
         })
       );
@@ -77,17 +102,25 @@ export class ArticleDetail {
     }
   }
 
+  changeEditedTitle(title) {
+    this.editedTitle = title;
+    this.onEditedFieldsChanged();
+  }
+
   changeEditedText(text) {
     this.editedText = text;
+    this.onEditedFieldsChanged();
+  }
 
+  onEditedFieldsChanged() {
     if (!this.willRefreshMarkup) {
       this.willRefreshMarkup = true;
       setTimeout(() => {
         this.willRefreshMarkup = false;
         this.setArticle(
           new Article({
-            id: this.article.id,
-            title: this.article.title,
+            id: this.article.getId(),
+            title: this.editedTitle,
             text: this.editedText,
           })
         );
@@ -96,7 +129,9 @@ export class ArticleDetail {
   }
 
   isSaved() {
-    return this.savedText === this.editedText;
+    return (
+      this.savedText === this.editedText && this.savedTitle === this.editedTitle
+    );
   }
 
   save() {
@@ -104,15 +139,31 @@ export class ArticleDetail {
     this.notify();
 
     const newArticleId = this.article.getId();
+    const newTitle = this.article.getTitle();
     const newText = this.article.getText();
-    this.dataSource.saveArticle(this.articleId, this.article).then(() => {
-      this.isSaving = false;
-      this.savedText = newText;
-      this.articleId = newArticleId;
-      if (!this.stopped) {
-        this.notify();
-      }
-    });
+
+    if (!this.isCreating) {
+      this.dataSource.saveArticle(this.articleId, this.article).then(() => {
+        this.isSaving = false;
+        this.savedTitle = newTitle;
+        this.savedText = newText;
+        this.articleId = newArticleId;
+        if (!this.stopped) {
+          this.notify();
+        }
+      });
+    } else {
+      this.dataSource.createArticle(this.article).then(() => {
+        this.isSaving = false;
+        this.isCreating = false;
+        this.savedTitle = newTitle;
+        this.savedText = newText;
+        this.articleId = newArticleId;
+        if (!this.stopped) {
+          this.notify();
+        }
+      });
+    }
   }
 
   render() {
@@ -140,11 +191,24 @@ export class ArticleDetail {
           h("div.col-sm.col-sm-6", [
             h("div.form-group", [
               h(
+                "input.form-control",
+                {
+                  on: { input: (e) => this.changeEditedTitle(e.target.value) },
+                  props: {
+                    type: "text",
+                    placeholder: "Title",
+                    value: this.editedTitle,
+                  },
+                },
+                []
+              ),
+              h(
                 "textarea.form-control",
                 {
                   on: {
                     input: (e) => this.changeEditedText(e.target.value),
                   },
+                  props: { placeholder: "Text" },
                 },
                 [this.editedText]
               ),
@@ -228,6 +292,10 @@ export class ArticleDetail {
   }
 
   renderAbortButton() {
+    if (this.isCreating) {
+      return null;
+    }
+
     const isDisabled = this.isSaving;
     const on = isDisabled ? {} : { click: () => this.abortEditing() };
     return h(
