@@ -2,59 +2,239 @@ import { renderToString } from "katex";
 import { h } from "snabbdom/build/package/h";
 import { renderNavigation } from "./skeleton";
 import { parseMarkdown } from "./markdown";
+import { Article } from "./data-source";
 
 export class ArticleDetail {
   constructor(notify, dataSource) {
     this.notify = notify;
     this.dataSource = dataSource;
+    this.articleId = null;
     this.article = null;
     this.ast = null;
     this.collapsedSections = new Set();
+
+    this.willRefreshMarkup = false;
+    this.isEditing = false;
+    this.savedText = null;
+    this.editedText = null;
+    this.isSaving = false;
     this.stopped = false;
   }
 
   start(id) {
+    this.articleId = id;
     this.dataSource.loadArticle(id).then((article) => {
-      this.article = article;
-      this.ast = parseMarkdown(this.article.getText()).toJS();
-
-      const processSectionsIn = (astItem) => {
-        switch (astItem.type) {
-          case "section":
-            if (astItem.collapse) {
-              this.collapsedSections.add(astItem.name);
-            }
-            astItem.content.forEach((child) => processSectionsIn(child));
-            break;
-        }
-      };
-
-      this.ast.map((item) => processSectionsIn(item));
-      if (!this.stopped) {
-        this.notify();
-      }
+      this.setArticle(article);
     });
+  }
+
+  setArticle(article) {
+    this.article = article;
+    this.ast = parseMarkdown(this.article.getText()).toJS();
+
+    const processSectionsIn = (astItem) => {
+      switch (astItem.type) {
+        case "section":
+          if (astItem.collapse) {
+            this.collapsedSections.add(astItem.name);
+          }
+          astItem.content.forEach((child) => processSectionsIn(child));
+          break;
+      }
+    };
+
+    this.ast.map((item) => processSectionsIn(item));
+    if (!this.stopped) {
+      this.notify();
+    }
   }
 
   stop() {
     this.stopped = true;
   }
 
+  edit() {
+    this.isEditing = true;
+    this.editedText = this.article.getText();
+    this.savedText = this.article.getText();
+    this.notify();
+  }
+
+  abortEditing() {
+    if (this.isSaved() || confirm("You have unsaved changes. Really abort?")) {
+      this.isEditing = false;
+      const text = this.savedText;
+      this.editedText = null;
+      this.savedText = null;
+      this.setArticle(
+        new Article({
+          id: this.article.getId(),
+          title: this.article.getTitle(),
+          text: text,
+        })
+      );
+      this.notify();
+    }
+  }
+
+  changeEditedText(text) {
+    this.editedText = text;
+
+    if (!this.willRefreshMarkup) {
+      this.willRefreshMarkup = true;
+      setTimeout(() => {
+        this.willRefreshMarkup = false;
+        this.setArticle(
+          new Article({
+            id: this.article.id,
+            title: this.article.title,
+            text: this.editedText,
+          })
+        );
+      }, 300);
+    }
+  }
+
+  isSaved() {
+    return this.savedText === this.editedText;
+  }
+
+  save() {
+    this.isSaving = true;
+    this.notify();
+
+    const newArticleId = this.article.getId();
+    const newText = this.article.getText();
+    this.dataSource.saveArticle(this.articleId, this.article).then(() => {
+      this.isSaving = false;
+      this.savedText = newText;
+      this.articleId = newArticleId;
+      if (!this.stopped) {
+        this.notify();
+      }
+    });
+  }
+
   render() {
-    return h("div", [renderNavigation(), this.renderArticle(this.article)]);
+    return h("div", [
+      renderNavigation(),
+      h("div.container", [this.renderArticle(this.article)]),
+    ]);
   }
 
   renderArticle() {
     return this.article !== null
-      ? h("div.container", [
-          h("div.article.my-3", [
-            h("h4", [this.article.getTitle()]),
-            h("section", this.renderAST(this.ast)),
+      ? this.renderAvailableArticle()
+      : this.renderLoading();
+  }
+
+  renderAvailableArticle() {
+    if (!this.isEditing) {
+      return h("div.article", [
+        this.renderNormalViewToolbar(),
+        h("div.article-markdown.my-3", [this.renderArticleMarkdown()]),
+      ]);
+    } else {
+      return h("div.article", [
+        h("div.row.my-3", [
+          h("div.col-sm.col-sm-6", [
+            h("div.form-group", [
+              h(
+                "textarea.form-control",
+                {
+                  on: {
+                    input: (e) => this.changeEditedText(e.target.value),
+                  },
+                },
+                [this.editedText]
+              ),
+            ]),
           ]),
-        ])
-      : h("div.container", [
-          h("div.article.my-3", [h("span", ["Loading..."])]),
-        ]);
+          h("div.col-sm.col-sm-6", [
+            h("div.article-markdown", [
+              this.renderEditingToolbar(),
+              this.renderArticleMarkdown(),
+            ]),
+          ]),
+        ]),
+      ]);
+    }
+  }
+
+  renderArticleMarkdown() {
+    return h("div", [
+      h("h4", [this.article.getTitle()]),
+      h("section", this.renderAST(this.ast)),
+    ]);
+  }
+
+  renderLoading() {
+    return h("div.container", [
+      h("div.article.my-3", [h("span", ["Loading..."])]),
+    ]);
+  }
+
+  renderNormalViewToolbar() {
+    return h("span.button-edit", [
+      h(
+        "button.btn.btn-secondary.float-right",
+        { props: { type: "button" }, on: { click: () => this.edit() } },
+        ["✎ Edit"]
+      ),
+    ]);
+  }
+
+  renderEditingToolbar() {
+    return h("span.button-save.float-right", [
+      !this.isSaving
+        ? !this.isSaved()
+          ? this.renderSaveButton()
+          : this.renderSavedIndicator()
+        : this.renderSavingIndicator(),
+      " ",
+      this.renderAbortButton(),
+    ]);
+  }
+
+  renderSaveButton() {
+    return h(
+      "button.btn.btn-primary",
+      {
+        props: { type: "button", disabled: false },
+        on: { click: () => this.save() },
+      },
+      ["Save"]
+    );
+  }
+
+  renderSavedIndicator() {
+    return h(
+      "button.btn.btn-primary",
+      {
+        props: { type: "button", disabled: true },
+      },
+      ["Saved"]
+    );
+  }
+
+  renderSavingIndicator() {
+    return h(
+      "button.btn.btn-primary",
+      {
+        props: { type: "button", disabled: true },
+      },
+      ["Saving..."]
+    );
+  }
+
+  renderAbortButton() {
+    const isDisabled = this.isSaving;
+    const on = isDisabled ? {} : { click: () => this.abortEditing() };
+    return h(
+      "button.btn.btn-secondary",
+      { props: { type: "button", disabled: isDisabled }, on },
+      ["Stop Editing"]
+    );
   }
 
   renderAST(ast) {

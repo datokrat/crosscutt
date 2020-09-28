@@ -24253,7 +24253,7 @@ class DataSource {
 
 class RemoteDataSource {
   loadArticlePreviews() {
-    return fetch("./api/get/previews", { method: "get" })
+    return fetch("./api/get/previews/", { method: "get" })
       .then((response) => response.json())
       .then((jsonData) => {
         return jsonData.previews.map((previewData) =>
@@ -24263,8 +24263,8 @@ class RemoteDataSource {
   }
 
   loadArticle(id) {
-    const url = new URL("api/get/article", location.href);
-    url.searchParams.append("title", id);
+    const url = new URL("api/get/article/", location.href);
+    url.searchParams.append("id", id);
     return fetch(url, { method: "get" })
       .then((response) => response.json())
       .then((jsonData) => {
@@ -24272,9 +24272,19 @@ class RemoteDataSource {
       });
   }
 
+  saveArticle(id, article) {
+    const url = new URL("api/change/article/", location.href);
+    url.searchParams.append("id", id);
+    url.searchParams.append("new_id", article.getId());
+    url.searchParams.append("new_title", article.getTitle());
+    url.searchParams.append("new_text", article.getText());
+
+    return fetch(url, { method: "get" }).then((response) => response.json());
+  }
+
   deserializePreview(data) {
     return new ArticlePreview({
-      id: data.title,
+      id: data.id,
       title: data.title,
       description: data.description,
     });
@@ -24282,7 +24292,7 @@ class RemoteDataSource {
 
   deserializeArticle(data) {
     return new Article({
-      id: data.title,
+      id: data.id,
       title: data.title,
       text: data.text,
     });
@@ -24379,6 +24389,8 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! snabbdom/build/package/h */ "./node_modules/snabbdom/build/package/h.js");
 /* harmony import */ var _skeleton__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ./skeleton */ "./src/skeleton.js");
 /* harmony import */ var _markdown__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ./markdown */ "./src/markdown.js");
+/* harmony import */ var _data_source__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ./data-source */ "./src/data-source.js");
+
 
 
 
@@ -24388,54 +24400,233 @@ class ArticleDetail {
   constructor(notify, dataSource) {
     this.notify = notify;
     this.dataSource = dataSource;
+    this.articleId = null;
     this.article = null;
     this.ast = null;
     this.collapsedSections = new Set();
+
+    this.willRefreshMarkup = false;
+    this.isEditing = false;
+    this.savedText = null;
+    this.editedText = null;
+    this.isSaving = false;
     this.stopped = false;
   }
 
   start(id) {
+    this.articleId = id;
     this.dataSource.loadArticle(id).then((article) => {
-      this.article = article;
-      this.ast = Object(_markdown__WEBPACK_IMPORTED_MODULE_3__["parseMarkdown"])(this.article.getText()).toJS();
-
-      const processSectionsIn = (astItem) => {
-        switch (astItem.type) {
-          case "section":
-            if (astItem.collapse) {
-              this.collapsedSections.add(astItem.name);
-            }
-            astItem.content.forEach((child) => processSectionsIn(child));
-            break;
-        }
-      };
-
-      this.ast.map((item) => processSectionsIn(item));
-      if (!this.stopped) {
-        this.notify();
-      }
+      this.setArticle(article);
     });
+  }
+
+  setArticle(article) {
+    this.article = article;
+    this.ast = Object(_markdown__WEBPACK_IMPORTED_MODULE_3__["parseMarkdown"])(this.article.getText()).toJS();
+
+    const processSectionsIn = (astItem) => {
+      switch (astItem.type) {
+        case "section":
+          if (astItem.collapse) {
+            this.collapsedSections.add(astItem.name);
+          }
+          astItem.content.forEach((child) => processSectionsIn(child));
+          break;
+      }
+    };
+
+    this.ast.map((item) => processSectionsIn(item));
+    if (!this.stopped) {
+      this.notify();
+    }
   }
 
   stop() {
     this.stopped = true;
   }
 
+  edit() {
+    this.isEditing = true;
+    this.editedText = this.article.getText();
+    this.savedText = this.article.getText();
+    this.notify();
+  }
+
+  abortEditing() {
+    if (this.isSaved() || confirm("You have unsaved changes. Really abort?")) {
+      this.isEditing = false;
+      const text = this.savedText;
+      this.editedText = null;
+      this.savedText = null;
+      this.setArticle(
+        new _data_source__WEBPACK_IMPORTED_MODULE_4__["Article"]({
+          id: this.article.getId(),
+          title: this.article.getTitle(),
+          text: text,
+        })
+      );
+      this.notify();
+    }
+  }
+
+  changeEditedText(text) {
+    this.editedText = text;
+
+    if (!this.willRefreshMarkup) {
+      this.willRefreshMarkup = true;
+      setTimeout(() => {
+        this.willRefreshMarkup = false;
+        this.setArticle(
+          new _data_source__WEBPACK_IMPORTED_MODULE_4__["Article"]({
+            id: this.article.id,
+            title: this.article.title,
+            text: this.editedText,
+          })
+        );
+      }, 300);
+    }
+  }
+
+  isSaved() {
+    return this.savedText === this.editedText;
+  }
+
+  save() {
+    this.isSaving = true;
+    this.notify();
+
+    const newArticleId = this.article.getId();
+    const newText = this.article.getText();
+    this.dataSource.saveArticle(this.articleId, this.article).then(() => {
+      this.isSaving = false;
+      this.savedText = newText;
+      this.articleId = newArticleId;
+      if (!this.stopped) {
+        this.notify();
+      }
+    });
+  }
+
   render() {
-    return Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])("div", [Object(_skeleton__WEBPACK_IMPORTED_MODULE_2__["renderNavigation"])(), this.renderArticle(this.article)]);
+    return Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])("div", [
+      Object(_skeleton__WEBPACK_IMPORTED_MODULE_2__["renderNavigation"])(),
+      Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])("div.container", [this.renderArticle(this.article)]),
+    ]);
   }
 
   renderArticle() {
     return this.article !== null
-      ? Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])("div.container", [
-          Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])("div.article.my-3", [
-            Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])("h4", [this.article.getTitle()]),
-            Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])("section", this.renderAST(this.ast)),
+      ? this.renderAvailableArticle()
+      : this.renderLoading();
+  }
+
+  renderAvailableArticle() {
+    if (!this.isEditing) {
+      return Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])("div.article", [
+        this.renderNormalViewToolbar(),
+        Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])("div.article-markdown.my-3", [this.renderArticleMarkdown()]),
+      ]);
+    } else {
+      return Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])("div.article", [
+        Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])("div.row.my-3", [
+          Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])("div.col-sm.col-sm-6", [
+            Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])("div.form-group", [
+              Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])(
+                "textarea.form-control",
+                {
+                  on: {
+                    input: (e) => this.changeEditedText(e.target.value),
+                  },
+                },
+                [this.editedText]
+              ),
+            ]),
           ]),
-        ])
-      : Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])("div.container", [
-          Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])("div.article.my-3", [Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])("span", ["Loading..."])]),
-        ]);
+          Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])("div.col-sm.col-sm-6", [
+            Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])("div.article-markdown", [
+              this.renderEditingToolbar(),
+              this.renderArticleMarkdown(),
+            ]),
+          ]),
+        ]),
+      ]);
+    }
+  }
+
+  renderArticleMarkdown() {
+    return Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])("div", [
+      Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])("h4", [this.article.getTitle()]),
+      Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])("section", this.renderAST(this.ast)),
+    ]);
+  }
+
+  renderLoading() {
+    return Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])("div.container", [
+      Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])("div.article.my-3", [Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])("span", ["Loading..."])]),
+    ]);
+  }
+
+  renderNormalViewToolbar() {
+    return Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])("span.button-edit", [
+      Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])(
+        "button.btn.btn-secondary.float-right",
+        { props: { type: "button" }, on: { click: () => this.edit() } },
+        ["✎ Edit"]
+      ),
+    ]);
+  }
+
+  renderEditingToolbar() {
+    return Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])("span.button-save.float-right", [
+      !this.isSaving
+        ? !this.isSaved()
+          ? this.renderSaveButton()
+          : this.renderSavedIndicator()
+        : this.renderSavingIndicator(),
+      " ",
+      this.renderAbortButton(),
+    ]);
+  }
+
+  renderSaveButton() {
+    return Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])(
+      "button.btn.btn-primary",
+      {
+        props: { type: "button", disabled: false },
+        on: { click: () => this.save() },
+      },
+      ["Save"]
+    );
+  }
+
+  renderSavedIndicator() {
+    return Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])(
+      "button.btn.btn-primary",
+      {
+        props: { type: "button", disabled: true },
+      },
+      ["Saved"]
+    );
+  }
+
+  renderSavingIndicator() {
+    return Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])(
+      "button.btn.btn-primary",
+      {
+        props: { type: "button", disabled: true },
+      },
+      ["Saving..."]
+    );
+  }
+
+  renderAbortButton() {
+    const isDisabled = this.isSaving;
+    const on = isDisabled ? {} : { click: () => this.abortEditing() };
+    return Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])(
+      "button.btn.btn-secondary",
+      { props: { type: "button", disabled: isDisabled }, on },
+      ["Stop Editing"]
+    );
   }
 
   renderAST(ast) {
@@ -24939,7 +25130,10 @@ function parseMarkdownParagraphContent(markdown) {
 }
 
 function parseMarkdownParagraph(markdown) {
-  return { type: "paragraph", content: parseMarkdownParagraphContent(markdown) };
+  return {
+    type: "paragraph",
+    content: parseMarkdownParagraphContent(markdown),
+  };
 }
 
 function parseNext(markdown) {
@@ -25007,7 +25201,7 @@ function parseLeadingLink(markdown) {
   const betweenBraces = markdown.slice(2, endingBracePos);
   const relativeDelimiterPos = betweenBraces.indexOf("|");
   if (relativeDelimiterPos === -1) {
-    return null;
+    return [null, markdown];
   }
 
   const caption = betweenBraces.slice(0, relativeDelimiterPos);
@@ -25091,7 +25285,9 @@ function parseLeadingItalicText(markdown) {
     markdown,
     "*",
     (content) => {
-      return content.length > 0 ? { type: "italic", content: parseMarkdownParagraphContent(content) } : null;
+      return content.length > 0
+        ? { type: "italic", content: parseMarkdownParagraphContent(content) }
+        : null;
     },
     "*"
   );
@@ -25102,7 +25298,9 @@ function parseLeadingBoldText(markdown) {
     markdown,
     "__",
     (content) => {
-      return content.length > 0 ? { type: "bold", content: parseMarkdownParagraphContent(content) } : null;
+      return content.length > 0
+        ? { type: "bold", content: parseMarkdownParagraphContent(content) }
+        : null;
     },
     "__"
   );

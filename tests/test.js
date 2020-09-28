@@ -139,6 +139,13 @@ describe("Markdown", () => {
     });
   });
 
+  it("link without |", () => {
+    assert.deepEqual(parseMarkdownParagraph("[[caption]]"), {
+      type: "paragraph",
+      content: [{ type: "text", value: "[[caption]]" }],
+    });
+  });
+
   it("math (block)", () => {
     assert.deepEqual(parseMarkdownParagraph("$$ \\KaTeX $$"), {
       type: "paragraph",

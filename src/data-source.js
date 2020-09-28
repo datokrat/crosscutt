@@ -30,7 +30,7 @@ export class DataSource {
 
 export class RemoteDataSource {
   loadArticlePreviews() {
-    return fetch("./api/get/previews", { method: "get" })
+    return fetch("./api/get/previews/", { method: "get" })
       .then((response) => response.json())
       .then((jsonData) => {
         return jsonData.previews.map((previewData) =>
@@ -40,8 +40,8 @@ export class RemoteDataSource {
   }
 
   loadArticle(id) {
-    const url = new URL("api/get/article", location.href);
-    url.searchParams.append("title", id);
+    const url = new URL("api/get/article/", location.href);
+    url.searchParams.append("id", id);
     return fetch(url, { method: "get" })
       .then((response) => response.json())
       .then((jsonData) => {
@@ -49,9 +49,19 @@ export class RemoteDataSource {
       });
   }
 
+  saveArticle(id, article) {
+    const url = new URL("api/change/article/", location.href);
+    url.searchParams.append("id", id);
+    url.searchParams.append("new_id", article.getId());
+    url.searchParams.append("new_title", article.getTitle());
+    url.searchParams.append("new_text", article.getText());
+
+    return fetch(url, { method: "get" }).then((response) => response.json());
+  }
+
   deserializePreview(data) {
     return new ArticlePreview({
-      id: data.title,
+      id: data.id,
       title: data.title,
       description: data.description,
     });
@@ -59,7 +69,7 @@ export class RemoteDataSource {
 
   deserializeArticle(data) {
     return new Article({
-      id: data.title,
+      id: data.id,
       title: data.title,
       text: data.text,
     });
