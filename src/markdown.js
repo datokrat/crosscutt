@@ -263,9 +263,21 @@ export function parseLeadingLink(markdown) {
       },
       rest,
     ];
-  } else {
+  } else if (address.startsWith("http://") || address.startsWith("https://")) {
     return [{ type: "link", content: caption, address: address }, rest];
+  } else {
+    return [
+      { type: "article-link", content: caption, path: unescape(address) },
+      rest,
+    ];
   }
+}
+
+function unescape(string) {
+  return string
+    .split("\\\\")
+    .map((substr) => substr.split("\\").join(""))
+    .join("\\");
 }
 
 export function parseBetweenDelimiters(

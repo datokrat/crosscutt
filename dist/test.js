@@ -17469,9 +17469,21 @@ function parseLeadingLink(markdown) {
       },
       rest,
     ];
-  } else {
+  } else if (address.startsWith("http://") || address.startsWith("https://")) {
     return [{ type: "link", content: caption, address: address }, rest];
+  } else {
+    return [
+      { type: "article-link", content: caption, path: unescape(address) },
+      rest,
+    ];
   }
+}
+
+function unescape(string) {
+  return string
+    .split("\\\\")
+    .map((substr) => substr.split("\\").join(""))
+    .join("\\");
 }
 
 function parseBetweenDelimiters(
@@ -17680,7 +17692,7 @@ describe("Markdown", () => {
     });
   });
 
-  it("internal link", () => {
+  it("internal link to reference", () => {
     assert.deepEqual(
       Object(_src_markdown__WEBPACK_IMPORTED_MODULE_1__["parseMarkdownParagraph"])("[[caption|reference:pinker-enlightenment-now]]"),
       {
@@ -17690,6 +17702,35 @@ describe("Markdown", () => {
             type: "ref-link",
             content: "caption",
             path: "pinker-enlightenment-now",
+          },
+        ],
+      }
+    );
+  });
+
+  it("internal link to article", () => {
+    assert.deepEqual(Object(_src_markdown__WEBPACK_IMPORTED_MODULE_1__["parseMarkdownParagraph"])("[[caption|article]]"), {
+      type: "paragraph",
+      content: [
+        {
+          type: "article-link",
+          content: "caption",
+          path: "article",
+        },
+      ],
+    });
+  });
+
+  it("internal link to article with colon", () => {
+    assert.deepEqual(
+      Object(_src_markdown__WEBPACK_IMPORTED_MODULE_1__["parseMarkdownParagraph"])("[[caption|reference\\:article]]"),
+      {
+        type: "paragraph",
+        content: [
+          {
+            type: "article-link",
+            content: "caption",
+            path: "reference:article",
           },
         ],
       }

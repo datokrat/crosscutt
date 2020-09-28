@@ -366,6 +366,14 @@ export class ArticleDetail {
             item.content,
           ]
         );
+      case "article-link":
+        return h(
+          "a",
+          {
+            props: { href: "./?article/" + item.path },
+          },
+          [item.content]
+        );
       case "katex-block":
         return h(
           "div",

@@ -114,7 +114,7 @@ describe("Markdown", () => {
     });
   });
 
-  it("internal link", () => {
+  it("internal link to reference", () => {
     assert.deepEqual(
       parseMarkdownParagraph("[[caption|reference:pinker-enlightenment-now]]"),
       {
@@ -124,6 +124,35 @@ describe("Markdown", () => {
             type: "ref-link",
             content: "caption",
             path: "pinker-enlightenment-now",
+          },
+        ],
+      }
+    );
+  });
+
+  it("internal link to article", () => {
+    assert.deepEqual(parseMarkdownParagraph("[[caption|article]]"), {
+      type: "paragraph",
+      content: [
+        {
+          type: "article-link",
+          content: "caption",
+          path: "article",
+        },
+      ],
+    });
+  });
+
+  it("internal link to article with colon", () => {
+    assert.deepEqual(
+      parseMarkdownParagraph("[[caption|reference\\:article]]"),
+      {
+        type: "paragraph",
+        content: [
+          {
+            type: "article-link",
+            content: "caption",
+            path: "reference:article",
           },
         ],
       }

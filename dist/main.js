@@ -24771,6 +24771,14 @@ class ArticleDetail {
             item.content,
           ]
         );
+      case "article-link":
+        return Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])(
+          "a",
+          {
+            props: { href: "./?article/" + item.path },
+          },
+          [item.content]
+        );
       case "katex-block":
         return Object(snabbdom_build_package_h__WEBPACK_IMPORTED_MODULE_1__["h"])(
           "div",
@@ -25307,9 +25315,21 @@ function parseLeadingLink(markdown) {
       },
       rest,
     ];
-  } else {
+  } else if (address.startsWith("http://") || address.startsWith("https://")) {
     return [{ type: "link", content: caption, address: address }, rest];
+  } else {
+    return [
+      { type: "article-link", content: caption, path: unescape(address) },
+      rest,
+    ];
   }
+}
+
+function unescape(string) {
+  return string
+    .split("\\\\")
+    .map((substr) => substr.split("\\").join(""))
+    .join("\\");
 }
 
 function parseBetweenDelimiters(
