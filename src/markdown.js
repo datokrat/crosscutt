@@ -1,4 +1,4 @@
-import { Map, List } from "immutable";
+import { Map, List, Seq } from "immutable";
 
 // ======= IMMUTABLE ZONE =======
 
@@ -13,6 +13,7 @@ function parseLines(inputLines, paragraphLines) {
     parseEnd(inputLines) ||
     parseHeadingAndRest(inputLines) ||
     parseSectionAndRest(inputLines) ||
+    parseTableAndRest(inputLines) ||
     parseEmptyLineAndRest(inputLines);
 
   if (followingElements !== null) {
@@ -30,6 +31,83 @@ function parseLines(inputLines, paragraphLines) {
 
     return parseLines(remainingLines, paragraphLines.push(firstLine));
   }
+}
+
+function parseTableAndRest(inputLines) {
+  if (inputLines.size === 0) {
+    return null;
+  }
+
+  const first = inputLines.first();
+  const remaining = inputLines.shift();
+
+  const header = parseTableHeader(first);
+  if (header === null) {
+    return null;
+  }
+
+  const [rows, rest] = parseTableBodyRows(remaining);
+
+  const table = {
+    type: "table",
+    head: header,
+    body: rows,
+  };
+
+  return parseLines(rest, List()).unshift(table);
+}
+
+function parseTableHeader(line) {
+  return parseTableBodyRow(line);
+}
+
+function parseTableBodyRows(lines) {
+  let remaining = lines;
+  let rows = List();
+
+  while (remaining.size > 0) {
+    const row = parseTableBodyRow(remaining.first());
+    if (row !== null) {
+      remaining = remaining.shift();
+      rows = rows.push(row);
+    } else {
+      return [rows, remaining];
+    }
+  }
+
+  return [rows, remaining];
+}
+
+function parseTableBodyRow(line) {
+  if (!line.startsWith("|")) {
+    return null;
+  }
+
+  let rest = line.slice(1);
+  let cols = List();
+  while (rest !== "") {
+    const result = parseRichBetweenDelimiters(
+      rest,
+      "",
+      (content) => content,
+      /\||$/
+    );
+
+    if (!wasParsingSuccessful(result)) {
+      return null;
+    }
+
+    if (
+      parsingRest(result).length !== 0 ||
+      parsingOutput(result).length !== 0
+    ) {
+      cols = cols.push(parsingOutput(result));
+    }
+
+    rest = parsingRest(result);
+  }
+
+  return cols;
 }
 
 function parseEmptyLineAndRest(inputLines) {
@@ -136,20 +214,29 @@ function createSection(name, collapse, lines) {
 }
 
 export function parseMarkdownParagraphContent(markdown) {
-  const [item, rest] = parseParagraphContentUntil(markdown, /$/);
-  return item;
+  const result = parseParagraphContentUntil(markdown, /$/);
+  return wasParsingSuccessful(result) ? parsingOutput(result) : null;
 }
 
 function parseParagraphContentUntil(markdown, predicateRegex) {
-  const startPredicateRegex = new RegExp("^" + predicateRegex.source, "");
+  const startPredicateRegex = new RegExp(
+    "^(" + predicateRegex.source + ")",
+    ""
+  );
   let rest = markdown;
-  const result = [];
+  const output = [];
   let lastItem = null;
   let i = 0;
   while (rest.search(startPredicateRegex) === -1 && i < 2000) {
     ++i;
-    let item;
-    [item, rest] = parseNext(rest, predicateRegex);
+    const nextResult = parseNext(rest, predicateRegex);
+
+    if (!wasParsingSuccessful(nextResult)) {
+      throw new Error("parseNext should always return successfully");
+    }
+
+    const item = parsingOutput(nextResult);
+    rest = parsingRest(nextResult);
 
     if (lastItem !== null) {
       if (lastItem.type === "text" && item.type === "text") {
@@ -158,7 +245,7 @@ function parseParagraphContentUntil(markdown, predicateRegex) {
           value: lastItem.value + item.value,
         };
       } else {
-        result.push(lastItem);
+        output.push(lastItem);
         lastItem = item;
       }
     } else {
@@ -167,21 +254,25 @@ function parseParagraphContentUntil(markdown, predicateRegex) {
   }
 
   if (rest.search(startPredicateRegex) === -1) {
-    return [null, markdown];
+    return parsingError();
   }
 
   if (lastItem !== null) {
-    result.push(lastItem);
+    output.push(lastItem);
   }
 
-  return [result, rest];
+  return parsingResult(output, rest);
 }
 
 export function parseMarkdownParagraph(markdown) {
-  return {
-    type: "paragraph",
-    content: parseMarkdownParagraphContent(markdown),
-  };
+  const content = parseMarkdownParagraphContent(markdown);
+
+  return content !== null
+    ? {
+        type: "paragraph",
+        content: parseMarkdownParagraphContent(markdown),
+      }
+    : null;
 }
 
 export function parseNext(markdown, delimiterRegex) {
@@ -200,14 +291,10 @@ function paragraphParsers(delimiterRegex) {
 }
 
 function parseOptions(markdown, options) {
-  for (let i = 0; i < options.size; ++i) {
-    const [item, rest] = options.get(i)(markdown);
-    if (item !== null) {
-      return [item, rest];
-    }
-  }
-
-  return [null, markdown];
+  const result = Seq(options)
+    .map((option) => option(markdown))
+    .find(wasParsingSuccessful);
+  return result !== undefined ? result : parsingError();
 }
 
 export function parseLeadingText(markdown, delimiterRegex) {
@@ -391,4 +478,24 @@ export function parseLeadingBoldText(markdown) {
     },
     /__/
   );
+}
+
+export function parsingResult(output, rest) {
+  return [output, rest];
+}
+
+export function parsingError() {
+  return [null, null];
+}
+
+export function wasParsingSuccessful(result) {
+  return result[0] !== null;
+}
+
+export function parsingOutput(result) {
+  return result[0];
+}
+
+export function parsingRest(result) {
+  return result[1];
 }

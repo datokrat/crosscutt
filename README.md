@@ -95,6 +95,17 @@ $$ \# G = \sum_{r \in R} \# ( G \bullet r ), $$
 where $R$ is a system of representants of the orbits unter $G$.
 ```
 
+#### Tables
+
+Write all columns of a row into a single line starting with `|` and separate them with `|`.
+The first row will be a the table header.
+
+```
+| First Column | Second Column |
+| Bla          | Blub          |
+| Bla          | Blub          |
+```
+
 ##### Collapsible Sections
 
 If you want some section of your article to be collapsible or exandible on demand, indent all of its lines (also empty lines!) using four spaces `    ` and precede it with a section header

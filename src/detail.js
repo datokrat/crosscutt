@@ -349,6 +349,34 @@ export class ArticleDetail {
           "p",
           item.content.map((child) => this.renderMarkdownItem(child))
         );
+      case "table":
+        return h("table", [
+          h("thead", [
+            h(
+              "tr",
+              item.head.map((col) =>
+                h(
+                  "th",
+                  col.map((item) => this.renderMarkdownItem(item))
+                )
+              )
+            ),
+          ]),
+          h(
+            "tbody",
+            item.body.map((row) =>
+              h(
+                "tr",
+                row.map((col) =>
+                  h(
+                    "td",
+                    col.map((item) => this.renderMarkdownItem(item))
+                  )
+                )
+              )
+            )
+          ),
+        ]);
       case "heading-1":
         return h("h4", [item.value]);
       case "bold":

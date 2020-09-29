@@ -226,4 +226,18 @@ describe("Markdown", () => {
       content: [{ type: "italic", content: [{ type: "text", value: "*" }] }],
     });
   });
+
+  it("table", () => {
+    assert.deepEqual(parseMarkdown("|A|B|C|").toJS(), [
+      {
+        type: "table",
+        head: [
+          [{ type: "text", value: "A" }],
+          [{ type: "text", value: "B" }],
+          [{ type: "text", value: "C" }],
+        ],
+        body: [],
+      },
+    ]);
+  });
 });
