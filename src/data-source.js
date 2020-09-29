@@ -1,4 +1,5 @@
 import { getSeed } from "./data-seed";
+import { Map } from "immutable";
 
 export class DataSource {
   constructor() {
@@ -11,20 +12,20 @@ export class DataSource {
 
   loadArticlePreviews() {
     return immediatePromise(
-      this.data.articles.map((article) => article.getPreview())
+      this.data.articles.map((article) => getPreview(article))
     );
   }
 
   loadArticle(id) {
     const foundArticle = this.data.articles.find(
-      (article) => article.getId() === id
+      (article) => article.get("id") === id
     );
     return immediatePromise(foundArticle !== undefined ? foundArticle : null);
   }
 
   loadReference(id) {
     const foundReference = this.data.references.find(
-      (reference) => reference.getId() === id
+      (reference) => reference.get("id") === id
     );
     return immediatePromise(
       foundReference !== undefined ? foundReference : null
@@ -60,18 +61,18 @@ export class RemoteDataSource {
   saveArticle(id, article) {
     const url = new URL("api/change/article/", location.href);
     url.searchParams.append("id", id);
-    url.searchParams.append("new_id", article.getId());
-    url.searchParams.append("new_title", article.getTitle());
-    url.searchParams.append("new_text", article.getText());
+    url.searchParams.append("new_id", article.get("id"));
+    url.searchParams.append("new_title", article.get("title"));
+    url.searchParams.append("new_text", article.get("text"));
 
     return fetch(url, { method: "get" }).then((response) => response.json());
   }
 
   createArticle(article) {
     const url = new URL("api/create/article/", location.href);
-    url.searchParams.append("id", article.getId());
-    url.searchParams.append("title", article.getTitle());
-    url.searchParams.append("text", article.getText());
+    url.searchParams.append("id", article.get("id"));
+    url.searchParams.append("title", article.get("title"));
+    url.searchParams.append("text", article.get("text"));
 
     return fetch(url, { method: "get" }).then((response) => response.json());
   }
@@ -86,7 +87,7 @@ export class RemoteDataSource {
 
   deserializeArticle(data) {
     if (data.success) {
-      return new Article({
+      return Map({
         id: data.id,
         title: data.title,
         text: data.text,
@@ -101,32 +102,12 @@ function immediatePromise(value) {
   return new Promise((resolve) => resolve(value));
 }
 
-export class Article {
-  constructor({ id, title, text }) {
-    this.id = id;
-    this.title = title;
-    this.text = text;
-  }
-
-  getId() {
-    return this.id;
-  }
-
-  getTitle() {
-    return this.title;
-  }
-
-  getText() {
-    return this.text;
-  }
-
-  getPreview() {
-    return new ArticlePreview({
-      id: this.id,
-      title: this.title,
-      description: this.text.slice(0, 200),
-    });
-  }
+function getArticlePreview(article) {
+  return new ArticlePreview({
+    id: article.get("id"),
+    title: article.get("title"),
+    description: article.get("text").slice(0, 200),
+  });
 }
 
 export class ArticlePreview {

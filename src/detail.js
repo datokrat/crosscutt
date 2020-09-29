@@ -2,35 +2,133 @@ import { renderToString } from "katex";
 import { h } from "snabbdom/build/package/h";
 import { renderNavigation } from "./skeleton";
 import { parseMarkdown } from "./markdown";
-import { Article } from "./data-source";
+import { Map } from "immutable";
 
-export class ArticleDetail {
+function initialState() {
+  return Map({
+    savedArticle: null,
+    editedArticle: null,
+    isCreating: false,
+    isSaving: false,
+  });
+}
+
+function initialCreateState(id) {
+  return Map({
+    savedArticle: null,
+    editedArticle: Map({
+      id: id,
+      title: "",
+      text: "",
+    }),
+    isCreating: true,
+    isSaving: false,
+  });
+}
+
+function readonlyArticleState(article) {
+  return Map({
+    savedArticle: article,
+    editedArticle: null,
+    isCreating: false,
+    isSaving: false,
+  });
+}
+
+function startEditing(state) {
+  return state.merge({
+    editedArticle: state.get("savedArticle"),
+  });
+}
+
+function abortEditing(state) {
+  if (state.get("isCreating")) {
+    throw new Error("Cannot abort creating an article.");
+  }
+
+  return state.merge({
+    editedArticle: null,
+  });
+}
+
+function startSaving(state) {
+  return state.set("isSaving", true);
+}
+
+function completeSaving(state, article) {
+  return state
+    .set("isSaving", false)
+    .set("isCreating", false)
+    .set("savedArticle", article);
+}
+
+function changeEditedTitle(state, title) {
+  return state.setIn(["editedArticle", "title"], title);
+}
+
+function changeEditedText(state, text) {
+  return state.setIn(["editedArticle", "text"], text);
+}
+
+function isSaved(state) {
+  if (state.get("savedArticle") === null) {
+    return false;
+  }
+
+  return state.get("savedArticle").equals(state.get("editedArticle"));
+}
+
+function isEditing(state) {
+  return state.get("editedArticle") !== null;
+}
+
+function visibleArticle(state) {
+  return isEditing(state)
+    ? state.get("editedArticle")
+    : state.get("savedArticle");
+}
+
+export class Model {
   constructor(notify, dataSource) {
     this.notify = notify;
     this.dataSource = dataSource;
-    this.article = null;
-    this.ast = null;
-    this.collapsedSections = new Set();
+    this.state = initialState();
+  }
 
-    this.willApplyMarkdown = false;
+  updateState(updater) {
+    this.state = updater(this.state);
+    this.notify();
+  }
 
-    this.isCreating = false;
-    this.savedArticle = null;
-    this.editedArticle = null;
-    this.isSaving = false;
+  isSaved() {
+    return isSaved(this.state);
+  }
 
-    this.stopped = false;
+  isEditing() {
+    return isEditing(this.state);
+  }
+
+  isSaving() {
+    return this.state.get("isSaving");
+  }
+
+  isCreating() {
+    return this.state.get("isCreating");
+  }
+
+  getVisibleArticle() {
+    return visibleArticle(this.state);
+  }
+
+  getEditedArticleField(field) {
+    return this.state.getIn(["editedArticle", field]);
   }
 
   start(id) {
     this.dataSource.loadArticle(id).then((article) => {
       if (article !== null) {
         // if article already exists, show it
-        this.setSavedArticle({
-          id: article.getId(),
-          title: article.getTitle(),
-          text: article.getText(),
-        });
+        this.showArticle(article);
       } else {
         // if article does not exist yet, create
         this.startCreating(id);
@@ -38,36 +136,40 @@ export class ArticleDetail {
     });
   }
 
+  showArticle(article) {
+    this.updateState(() => readonlyArticleState(article));
+  }
+
   startCreating(id) {
     this.ensureCanEdit();
-    this.editedArticle = {
-      id: id,
-      title: "",
-      text: "",
-    };
-    this.isCreating = true;
-
-    this.notify();
+    this.updateState(() => initialCreateState(id));
   }
 
   startEditing() {
     this.ensureCanEdit();
-    this.editedArticle = {
-      id: this.savedArticle.id,
-      title: this.savedArticle.title,
-      text: this.savedArticle.text,
-    };
-    this.isCreating = false;
-
-    this.notify();
+    this.updateState((state) => startEditing(state));
   }
 
-  getVisibleArticle() {
-    return this.isEditing() ? this.editedArticle : this.savedArticle;
+  save() {
+    this.updateState((state) => startSaving(state));
+
+    const updatedArticle = this.state.get("editedArticle");
+
+    if (!this.isCreating()) {
+      this.dataSource
+        .saveArticle(this.state.getIn(["savedArticle", "id"]), updatedArticle)
+        .then(() => {
+          this.updateState((state) => completeSaving(state, updatedArticle));
+        });
+    } else {
+      this.dataSource.createArticle(updatedArticle).then(() => {
+        this.updateState((state) => completeSaving(state, updatedArticle));
+      });
+    }
   }
 
-  isEditing() {
-    return this.editedArticle !== null;
+  abortEditing() {
+    this.updateState((state) => abortEditing(state));
   }
 
   ensureCanEdit() {
@@ -76,14 +178,42 @@ export class ArticleDetail {
     }
   }
 
-  setSavedArticle(article) {
-    this.savedArticle = article;
-    this.applyMarkdown();
+  changeEditedTitle(title) {
+    this.state = changeEditedTitle(this.state, title);
     this.notify();
   }
 
+  changeEditedText(text) {
+    this.state = changeEditedText(this.state, text);
+    this.notify();
+  }
+}
+
+export class ArticleDetail {
+  constructor(notify, dataSource) {
+    this.notify = notify;
+    this.dataSource = dataSource;
+
+    this.ast = null;
+    this.collapsedSections = new Set();
+    this.willApplyMarkdown = false;
+
+    this.model = new Model(() => this.onStateChanged(), dataSource);
+
+    this.stopped = false;
+  }
+
+  onStateChanged() {
+    this.onEditedArticleChanged();
+    this.notify();
+  }
+
+  start(id) {
+    this.model.start(id);
+  }
+
   applyMarkdown() {
-    const markdown = this.getVisibleArticle().text;
+    const markdown = this.model.getVisibleArticle().get("text");
 
     this.ast = parseMarkdown(markdown).toJS();
 
@@ -102,39 +232,21 @@ export class ArticleDetail {
     this.notify();
   }
 
-  stop() {
-    this.stopped = true;
-  }
-
   abortEditing() {
-    if (this.isCreating) {
-      throw new Error("Cannot abort creating an article.");
+    if (
+      this.model.isSaved() ||
+      confirm("You have unsaved changes. Really abort?")
+    ) {
+      this.model.abortEditing();
     }
-
-    if (this.isSaved() || confirm("You have unsaved changes. Really abort?")) {
-      this.editedArticle = null;
-      this.applyMarkdown();
-      this.notify();
-    }
-  }
-
-  changeEditedTitle(title) {
-    this.editedArticle = {
-      ...this.editedArticle,
-      title: title,
-    };
-    this.onEditedArticleChanged();
-  }
-
-  changeEditedText(text) {
-    this.editedArticle = {
-      ...this.editedArticle,
-      text: text,
-    };
-    this.onEditedArticleChanged();
   }
 
   onEditedArticleChanged() {
+    if (this.ast === null) {
+      this.applyMarkdown();
+      return;
+    }
+
     if (!this.willApplyMarkdown) {
       this.willApplyMarkdown = true;
       setTimeout(() => {
@@ -144,64 +256,30 @@ export class ArticleDetail {
     }
   }
 
+  stop() {
+    this.stopped = true;
+  }
+
   adjustTextareaSize(textarea) {
     textarea.style.height = "auto";
     textarea.style.height = textarea.scrollHeight + "px";
   }
 
-  isSaved() {
-    if (this.savedArticle === null) {
-      return false;
-    }
-
-    return (
-      this.editedArticle.id === this.savedArticle.id &&
-      this.editedArticle.title === this.savedArticle.title &&
-      this.editedArticle.text === this.savedArticle.text
-    );
-  }
-
-  save() {
-    this.ensureCanEdit();
-
-    this.isSaving = true;
-    this.notify();
-
-    const updatedArticle = this.editedArticle;
-
-    if (!this.isCreating) {
-      this.dataSource
-        .saveArticle(this.savedArticle.id, new Article(updatedArticle))
-        .then(() => {
-          this.isSaving = false;
-          this.savedArticle = updatedArticle;
-          this.notify();
-        });
-    } else {
-      this.dataSource.createArticle(new Article(updatedArticle)).then(() => {
-        this.isSaving = false;
-        this.isCreating = false;
-        this.savedArticle = updatedArticle;
-        this.notify();
-      });
-    }
-  }
-
   render() {
     return h("div", [
       renderNavigation(),
-      h("div.container", [this.renderArticle(this.article)]),
+      h("div.container", [this.renderArticle()]),
     ]);
   }
 
   renderArticle() {
-    return this.getVisibleArticle() !== null
+    return this.model.getVisibleArticle() !== null
       ? this.renderAvailableArticle()
       : this.renderLoading();
   }
 
   renderAvailableArticle() {
-    if (!this.isEditing()) {
+    if (!this.model.isEditing()) {
       return h("div.article", [
         this.renderNormalViewToolbar(),
         h("div.article-markdown.my-3", [this.renderArticleMarkdown()]),
@@ -214,11 +292,13 @@ export class ArticleDetail {
               h(
                 "input.form-control",
                 {
-                  on: { input: (e) => this.changeEditedTitle(e.target.value) },
+                  on: {
+                    input: (e) => this.model.changeEditedTitle(e.target.value),
+                  },
                   props: {
                     type: "text",
                     placeholder: "Title",
-                    value: this.editedArticle.title,
+                    value: this.model.getEditedArticleField("title"),
                   },
                 },
                 []
@@ -228,13 +308,13 @@ export class ArticleDetail {
                 {
                   on: {
                     input: (e) => {
-                      this.changeEditedText(e.target.value);
+                      this.model.changeEditedText(e.target.value);
                       this.adjustTextareaSize(e.target);
                     },
                   },
                   props: { placeholder: "Text" },
                 },
-                [this.editedArticle.text]
+                [this.model.getEditedArticleField("text")]
               ),
             ]),
           ]),
@@ -251,7 +331,7 @@ export class ArticleDetail {
 
   renderArticleMarkdown() {
     return h("div", [
-      h("h4", [this.getVisibleArticle().title]),
+      h("h4", [this.model.getVisibleArticle().get("title")]),
       h("section", this.renderAST(this.ast)),
     ]);
   }
@@ -270,7 +350,10 @@ export class ArticleDetail {
     return h("span.button-edit", [
       h(
         "button.btn.btn-secondary.float-right",
-        { props: { type: "button" }, on: { click: () => this.startEditing() } },
+        {
+          props: { type: "button" },
+          on: { click: () => this.model.startEditing() },
+        },
         ["✎ Edit"]
       ),
     ]);
@@ -282,8 +365,8 @@ export class ArticleDetail {
     }
 
     return h("span.button-save.float-right", [
-      !this.isSaving
-        ? !this.isSaved()
+      !this.model.isSaving()
+        ? !this.model.isSaved()
           ? this.renderSaveButton()
           : this.renderSavedIndicator()
         : this.renderSavingIndicator(),
@@ -297,7 +380,7 @@ export class ArticleDetail {
       "button.btn.btn-primary",
       {
         props: { type: "button", disabled: false },
-        on: { click: () => this.save() },
+        on: { click: () => this.model.save() },
       },
       ["Save"]
     );
@@ -324,12 +407,12 @@ export class ArticleDetail {
   }
 
   renderAbortButton() {
-    if (this.isCreating) {
+    if (this.model.isCreating()) {
       return null;
     }
 
-    const isDisabled = this.isSaving;
-    const on = isDisabled ? {} : { click: () => this.abortEditing() };
+    const isDisabled = this.model.isSaving();
+    const on = isDisabled ? {} : { click: () => this.model.abortEditing() };
     return h(
       "button.btn.btn-secondary",
       { props: { type: "button", disabled: isDisabled }, on },
