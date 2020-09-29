@@ -13,44 +13,51 @@ export class App {
   }
 
   init(route) {
-    this.route = route;
-    this.getActiveView().start(this.getViewSpecificRoute());
+    this.doRouting(route, [
+      [
+        "article/",
+        (path) => {
+          this.view = new ArticleDetail(this.notify, this.dataSource);
+          this.view.start(path);
+        },
+      ],
+      [
+        "reference/",
+        (path) => {
+          this.view = new ReferenceView(this.notify, this.dataSource);
+          this.view.start(path);
+        },
+      ],
+      [
+        "",
+        (path) => {
+          this.view = new BlogList(this.notify, this.dataSource);
+          this.view.start(path);
+        },
+      ],
+    ]);
     this.notify();
+  }
+
+  doRouting(route, handlers) {
+    const applicableHandler = handlers.find(isHandlerApplicableTo(route));
+
+    if (applicableHandler !== undefined) {
+      return applyHandler(route, applicableHandler);
+    } else {
+      throw new Error("No suitable route found");
+    }
+
+    function isHandlerApplicableTo(route) {
+      return ([path, _]) => route.startsWith(path);
+    }
+
+    function applyHandler(route, [path, handler]) {
+      return handler(route.slice(path.length));
+    }
   }
 
   render() {
-    return this.getActiveView().render();
-  }
-
-  getViewSpecificRoute() {
-    switch (this.getActiveView()) {
-      case this.articleDetail:
-        return this.route.slice("article/".length);
-      case this.referenceView:
-        return this.route.slice("reference/".length);
-      default:
-        return "";
-    }
-  }
-
-  handle_route_change(new_route) {
-    this.oldView = this.getActiveView();
-    this.route = new_route;
-    if (this.getActiveView() === this.articleDetail) {
-      this.articleDetail.handleRouteChange(this.route.slice(8));
-    } else if (this.getActiveView() === this.referenceView) {
-      this.referenceView.handleRouteChange(this.route.slice(10));
-    }
-    this.notify();
-  }
-
-  getActiveView() {
-    if (this.route.startsWith("article/")) {
-      return this.articleDetail;
-    } else if (this.route.startsWith("reference/")) {
-      return this.referenceView;
-    } else {
-      return this.blogList;
-    }
+    return this.view.render();
   }
 }

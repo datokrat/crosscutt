@@ -1,36 +1,14 @@
 import { h } from "snabbdom/build/package/h";
 import { renderNavigation } from "./skeleton";
-
-// Works only in event handlers, see https://stackoverflow.com/questions/400212/how-do-i-copy-to-the-clipboard-in-javascript
-function copyToClipboard(text) {
-  var textArea = document.createElement("textarea");
-  textArea.value = text;
-
-  // Avoid scrolling to bottom
-  textArea.style.top = "0";
-  textArea.style.left = "0";
-  textArea.style.position = "fixed";
-
-  document.body.appendChild(textArea);
-  textArea.focus();
-  textArea.select();
-
-  document.execCommand("copy");
-  textArea.remove();
-}
+import { copyToClipboard } from "./miscellaneous";
 
 export class ReferenceView {
   constructor(notify, dataSource) {
     this.notify = notify;
     this.dataSource = dataSource;
-    this.session = null;
   }
 
-  handleRouteChange(route) {
-    if (this.session !== null) {
-      this.session.stop();
-    }
-
+  start(route) {
     const parts = route.split("/").map(decodeURIComponent);
     const referenceId = parts[0];
     const location =

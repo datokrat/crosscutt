@@ -8,52 +8,84 @@ export class ArticleDetail {
   constructor(notify, dataSource) {
     this.notify = notify;
     this.dataSource = dataSource;
-    this.articleId = null;
     this.article = null;
     this.ast = null;
     this.collapsedSections = new Set();
 
+    this.willApplyMarkdown = false;
+
     this.isCreating = false;
-    this.willRefreshMarkup = false;
-    this.isEditing = false;
-    this.savedTitle = null;
-    this.savedText = null;
-    this.editedTitle = null;
-    this.editedText = null;
+    this.savedArticle = null;
+    this.editedArticle = null;
     this.isSaving = false;
+
     this.stopped = false;
   }
 
   start(id) {
-    this.articleId = id;
     this.dataSource.loadArticle(id).then((article) => {
       if (article !== null) {
-        // if article already exists, edit
-        this.setArticle(article);
+        // if article already exists, show it
+        this.setSavedArticle({
+          id: article.getId(),
+          title: article.getTitle(),
+          text: article.getText(),
+        });
       } else {
-        if (this.dataSource.isReadOnly()) {
-          throw new Error(
-            "data source is read-only and article does not exist"
-          );
-        }
-
         // if article does not exist yet, create
-        this.isCreating = true;
-        this.setArticle(
-          new Article({
-            id: id,
-            title: "",
-            text: "",
-          })
-        );
-        this.edit();
+        this.startCreating(id);
       }
     });
   }
 
-  setArticle(article) {
-    this.article = article;
-    this.ast = parseMarkdown(this.article.getText()).toJS();
+  startCreating(id) {
+    this.ensureCanEdit();
+    this.editedArticle = {
+      id: id,
+      title: "",
+      text: "",
+    };
+    this.isCreating = true;
+
+    this.notify();
+  }
+
+  startEditing() {
+    this.ensureCanEdit();
+    this.editedArticle = {
+      id: this.savedArticle.id,
+      title: this.savedArticle.title,
+      text: this.savedArticle.text,
+    };
+    this.isCreating = false;
+
+    this.notify();
+  }
+
+  getVisibleArticle() {
+    return this.isEditing() ? this.editedArticle : this.savedArticle;
+  }
+
+  isEditing() {
+    return this.editedArticle !== null;
+  }
+
+  ensureCanEdit() {
+    if (this.dataSource.isReadOnly()) {
+      throw new Error("data source is read-only, cannot edit articles");
+    }
+  }
+
+  setSavedArticle(article) {
+    this.savedArticle = article;
+    this.applyMarkdown();
+    this.notify();
+  }
+
+  applyMarkdown() {
+    const markdown = this.getVisibleArticle().text;
+
+    this.ast = parseMarkdown(markdown).toJS();
 
     const processSectionsIn = (astItem) => {
       switch (astItem.type) {
@@ -67,59 +99,49 @@ export class ArticleDetail {
     };
 
     this.ast.map((item) => processSectionsIn(item));
-    if (!this.stopped) {
-      this.notify();
-    }
+    this.notify();
   }
 
   stop() {
     this.stopped = true;
   }
 
-  edit() {
-    if (this.dataSource.isReadOnly()) {
-      throw new Error("data source is read-only");
-    }
-
-    this.isEditing = true;
-    this.editedText = this.article.getText();
-    this.editedTitle = this.article.getTitle();
-    this.savedTitle = this.article.getTitle();
-    this.savedText = this.article.getText();
-    this.notify();
-  }
-
   abortEditing() {
     if (this.isCreating) {
-      return;
+      throw new Error("Cannot abort creating an article.");
     }
 
     if (this.isSaved() || confirm("You have unsaved changes. Really abort?")) {
-      this.isEditing = false;
-      const title = this.savedTitle;
-      const text = this.savedText;
-      this.editedTitle = null;
-      this.editedText = null;
-      this.savedText = null;
-      this.setArticle(
-        new Article({
-          id: this.article.getId(),
-          title: title,
-          text: text,
-        })
-      );
+      this.editedArticle = null;
+      this.applyMarkdown();
       this.notify();
     }
   }
 
   changeEditedTitle(title) {
-    this.editedTitle = title;
-    this.onEditedFieldsChanged();
+    this.editedArticle = {
+      ...this.editedArticle,
+      title: title,
+    };
+    this.onEditedArticleChanged();
   }
 
   changeEditedText(text) {
-    this.editedText = text;
-    this.onEditedFieldsChanged();
+    this.editedArticle = {
+      ...this.editedArticle,
+      text: text,
+    };
+    this.onEditedArticleChanged();
+  }
+
+  onEditedArticleChanged() {
+    if (!this.willApplyMarkdown) {
+      this.willApplyMarkdown = true;
+      setTimeout(() => {
+        this.willApplyMarkdown = false;
+        this.applyMarkdown();
+      }, 300);
+    }
   }
 
   adjustTextareaSize(textarea) {
@@ -127,60 +149,40 @@ export class ArticleDetail {
     textarea.style.height = textarea.scrollHeight + "px";
   }
 
-  onEditedFieldsChanged() {
-    if (!this.willRefreshMarkup) {
-      this.willRefreshMarkup = true;
-      setTimeout(() => {
-        this.willRefreshMarkup = false;
-        this.setArticle(
-          new Article({
-            id: this.article.getId(),
-            title: this.editedTitle,
-            text: this.editedText,
-          })
-        );
-      }, 300);
-    }
-  }
-
   isSaved() {
+    if (this.savedArticle === null) {
+      return false;
+    }
+
     return (
-      this.savedText === this.editedText && this.savedTitle === this.editedTitle
+      this.editedArticle.id === this.savedArticle.id &&
+      this.editedArticle.title === this.savedArticle.title &&
+      this.editedArticle.text === this.savedArticle.text
     );
   }
 
   save() {
-    if (this.dataSource.isReadOnly()) {
-      throw new Error("data source is read-only");
-    }
+    this.ensureCanEdit();
 
     this.isSaving = true;
     this.notify();
 
-    const newArticleId = this.article.getId();
-    const newTitle = this.article.getTitle();
-    const newText = this.article.getText();
+    const updatedArticle = this.editedArticle;
 
     if (!this.isCreating) {
-      this.dataSource.saveArticle(this.articleId, this.article).then(() => {
-        this.isSaving = false;
-        this.savedTitle = newTitle;
-        this.savedText = newText;
-        this.articleId = newArticleId;
-        if (!this.stopped) {
+      this.dataSource
+        .saveArticle(this.savedArticle.id, new Article(updatedArticle))
+        .then(() => {
+          this.isSaving = false;
+          this.savedArticle = updatedArticle;
           this.notify();
-        }
-      });
+        });
     } else {
-      this.dataSource.createArticle(this.article).then(() => {
+      this.dataSource.createArticle(new Article(updatedArticle)).then(() => {
         this.isSaving = false;
         this.isCreating = false;
-        this.savedTitle = newTitle;
-        this.savedText = newText;
-        this.articleId = newArticleId;
-        if (!this.stopped) {
-          this.notify();
-        }
+        this.savedArticle = updatedArticle;
+        this.notify();
       });
     }
   }
@@ -193,13 +195,13 @@ export class ArticleDetail {
   }
 
   renderArticle() {
-    return this.article !== null
+    return this.getVisibleArticle() !== null
       ? this.renderAvailableArticle()
       : this.renderLoading();
   }
 
   renderAvailableArticle() {
-    if (!this.isEditing) {
+    if (!this.isEditing()) {
       return h("div.article", [
         this.renderNormalViewToolbar(),
         h("div.article-markdown.my-3", [this.renderArticleMarkdown()]),
@@ -216,7 +218,7 @@ export class ArticleDetail {
                   props: {
                     type: "text",
                     placeholder: "Title",
-                    value: this.editedTitle,
+                    value: this.editedArticle.title,
                   },
                 },
                 []
@@ -232,7 +234,7 @@ export class ArticleDetail {
                   },
                   props: { placeholder: "Text" },
                 },
-                [this.editedText]
+                [this.editedArticle.text]
               ),
             ]),
           ]),
@@ -249,7 +251,7 @@ export class ArticleDetail {
 
   renderArticleMarkdown() {
     return h("div", [
-      h("h4", [this.article.getTitle()]),
+      h("h4", [this.getVisibleArticle().title]),
       h("section", this.renderAST(this.ast)),
     ]);
   }
@@ -268,7 +270,7 @@ export class ArticleDetail {
     return h("span.button-edit", [
       h(
         "button.btn.btn-secondary.float-right",
-        { props: { type: "button" }, on: { click: () => this.edit() } },
+        { props: { type: "button" }, on: { click: () => this.startEditing() } },
         ["✎ Edit"]
       ),
     ]);
