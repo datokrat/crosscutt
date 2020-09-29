@@ -232,7 +232,7 @@ function parseParagraphContentUntil(markdown, predicateRegex) {
     const nextResult = parseNext(rest, predicateRegex);
 
     if (!wasParsingSuccessful(nextResult)) {
-      throw new Error("parseNext should always return successfully");
+      return parsingError();
     }
 
     const item = parsingOutput(nextResult);

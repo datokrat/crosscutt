@@ -240,4 +240,24 @@ describe("Markdown", () => {
       },
     ]);
   });
+
+  it("table with italic text", () => {
+    assert.deepEqual(parseMarkdown("|*A*|").toJS(), [
+      {
+        type: "table",
+        head: [[{ type: "italic", content: [{ type: "text", value: "A" }] }]],
+        body: [],
+      },
+    ]);
+  });
+
+  it("table with incorrect italic text", () => {
+    assert.deepEqual(parseMarkdown("|*A|").toJS(), [
+      {
+        type: "table",
+        head: [[{ type: "text", value: "*A" }]],
+        body: [],
+      },
+    ]);
+  });
 });

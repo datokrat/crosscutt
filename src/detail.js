@@ -122,6 +122,11 @@ export class ArticleDetail {
     this.onEditedFieldsChanged();
   }
 
+  adjustTextareaSize(textarea) {
+    textarea.style.height = "auto";
+    textarea.style.height = textarea.scrollHeight + "px";
+  }
+
   onEditedFieldsChanged() {
     if (!this.willRefreshMarkup) {
       this.willRefreshMarkup = true;
@@ -217,10 +222,13 @@ export class ArticleDetail {
                 []
               ),
               h(
-                "textarea.form-control",
+                "textarea.form-control.article-text-editor",
                 {
                   on: {
-                    input: (e) => this.changeEditedText(e.target.value),
+                    input: (e) => {
+                      this.changeEditedText(e.target.value);
+                      this.adjustTextareaSize(e.target);
+                    },
                   },
                   props: { placeholder: "Text" },
                 },
@@ -350,32 +358,34 @@ export class ArticleDetail {
           item.content.map((child) => this.renderMarkdownItem(child))
         );
       case "table":
-        return h("table", [
-          h("thead", [
+        return h("p", [
+          h("table.table", [
+            h("thead", [
+              h(
+                "tr",
+                item.head.map((col) =>
+                  h(
+                    "th",
+                    col.map((item) => this.renderMarkdownItem(item))
+                  )
+                )
+              ),
+            ]),
             h(
-              "tr",
-              item.head.map((col) =>
+              "tbody",
+              item.body.map((row) =>
                 h(
-                  "th",
-                  col.map((item) => this.renderMarkdownItem(item))
+                  "tr",
+                  row.map((col) =>
+                    h(
+                      "td",
+                      col.map((item) => this.renderMarkdownItem(item))
+                    )
+                  )
                 )
               )
             ),
           ]),
-          h(
-            "tbody",
-            item.body.map((row) =>
-              h(
-                "tr",
-                row.map((col) =>
-                  h(
-                    "td",
-                    col.map((item) => this.renderMarkdownItem(item))
-                  )
-                )
-              )
-            )
-          ),
         ]);
       case "heading-1":
         return h("h4", [item.value]);
