@@ -24,7 +24,9 @@ export class ArticleDetailRenderer {
     if (!this.model.isEditing()) {
       return h("div.article", [
         this.renderNormalViewToolbar(),
-        h("div.article-markdown.my-3", [this.markdownRenderer.renderArticleMarkdown()]),
+        h("div.article-markdown.my-3", [
+          this.markdownRenderer.renderArticleMarkdown(),
+        ]),
       ]);
     } else {
       return h("div.article", [
@@ -48,6 +50,9 @@ export class ArticleDetailRenderer {
               h(
                 "textarea.form-control.article-text-editor",
                 {
+                  hook: {
+                    insert: (vnode) => this.adjustTextareaSize(vnode.elm),
+                  },
                   on: {
                     input: (e) => {
                       this.model.changeEditedText(e.target.value);
