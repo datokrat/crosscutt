@@ -257,4 +257,13 @@ describe("Markdown", () => {
       },
     ]);
   });
+
+  it("list", () => {
+    assert.deepEqual(parseMarkdown("*A\n*B").toJS(), [
+      {
+        type: "unordered-list",
+        items: [[{ type: "text", value: "A" }], [{ type: "text", value: "B" }]],
+      },
+    ]);
+  });
 });

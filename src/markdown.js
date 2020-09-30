@@ -14,6 +14,7 @@ function parseLines(inputLines, paragraphLines) {
     parseHeadingAndRest(inputLines) ||
     parseSectionAndRest(inputLines) ||
     parseTableAndRest(inputLines) ||
+    parseListAndRest(inputLines) ||
     parseEmptyLineAndRest(inputLines);
 
   if (followingElements !== null) {
@@ -30,6 +31,51 @@ function parseLines(inputLines, paragraphLines) {
     const remainingLines = inputLines.shift();
 
     return parseLines(remainingLines, paragraphLines.push(firstLine));
+  }
+}
+
+function parseListAndRest(inputLines) {
+  const [list, remaining] = parseList(inputLines, "*");
+
+  return list !== null ? parseLines(remaining, List()).unshift(list) : null;
+}
+
+function parseList(lines, symbol) {
+  let items = List();
+  let remaining = lines;
+
+  while (remaining.size > 0) {
+    const [item, rest] = parseListItem(remaining, symbol);
+
+    if (item !== null) {
+      remaining = rest;
+      items = items.push(item);
+    } else {
+      break;
+    }
+  }
+
+  return items.size > 0
+    ? [{ type: "unordered-list", items }, remaining]
+    : [null, lines];
+}
+
+function parseListItem(lines, symbol) {
+  if (lines.size > 0 && lines.first().startsWith(symbol)) {
+    const [inlineContent, _] = parseParagraphContentUntil(
+      lines.first().slice(symbol.length),
+      /$/
+    );
+
+    const [sublist, rest] = parseList(lines.shift(), symbol + "*");
+
+    if (sublist !== null) {
+      return [[...inlineContent, sublist], rest];
+    } else {
+      return [inlineContent, lines.shift()];
+    }
+  } else {
+    return [null, lines];
   }
 }
 

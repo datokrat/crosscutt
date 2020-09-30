@@ -35,6 +35,16 @@ export class Renderer {
           "p",
           item.content.map((child) => this.renderMarkdownItem(child))
         );
+      case "unordered-list":
+        return h(
+          "ul",
+          item.items.map((li) =>
+            h(
+              "li",
+              li.map((x) => this.renderMarkdownItem(x))
+            )
+          )
+        );
       case "table":
         return h("p", [
           h("table.table", [
