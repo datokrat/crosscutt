@@ -385,7 +385,16 @@ export function parseLeadingLink(markdown) {
   const betweenBraces = markdown.slice(2, endingBracePos);
   const relativeDelimiterPos = betweenBraces.indexOf("|");
   if (relativeDelimiterPos === -1) {
-    return [null, markdown];
+    const caption = betweenBraces;
+    const rest = markdown.slice(endingBracePos + 2);
+    return [
+      {
+        type: "article-link",
+        content: caption,
+        path: caption,
+      },
+      rest,
+    ];
   }
 
   const caption = betweenBraces.slice(0, relativeDelimiterPos);

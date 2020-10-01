@@ -168,7 +168,7 @@ describe("Markdown", () => {
   it("link without |", () => {
     assert.deepEqual(parseMarkdownParagraph("[[caption]]"), {
       type: "paragraph",
-      content: [{ type: "text", value: "[[caption]]" }],
+      content: [{ type: "article-link", content: "caption", path: "caption" }],
     });
   });
 
