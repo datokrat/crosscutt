@@ -2,6 +2,7 @@ from django.shortcuts import render
 from django.http import JsonResponse
 from django.db import transaction
 from django.db.models import Q
+from django.utils import timezone
 from .models import Article
 
 class ArticleIntegrityException(Exception):
@@ -63,7 +64,8 @@ def change_article(request):
             Article.objects.filter(title=title).update(
                 article_id=new_id,
                 title=new_title,
-                text=new_text)
+                text=new_text,
+                last_modified_at=timezone.now())
             validateUnique(new_id)
             validateUnique(new_title)
     except ArticleIntegrityException:

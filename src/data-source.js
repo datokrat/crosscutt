@@ -70,7 +70,7 @@ export class RemoteDataSource {
 
   createArticle(article) {
     const url = new URL("api/create/article/", location.href);
-    url.searchParams.append("id", article.get("id"));
+    url.searchParams.append("id", article.get("id") || "");
     url.searchParams.append("title", article.get("title"));
     url.searchParams.append("text", article.get("text"));
 

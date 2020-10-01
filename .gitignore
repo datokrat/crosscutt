@@ -4,6 +4,6 @@
 *.bak
 *.pyc
 *.generated.conf
-db.sqlite3
+*.sqlite3
 __pycache__
 /dist/
