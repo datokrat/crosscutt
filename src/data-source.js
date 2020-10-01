@@ -61,7 +61,7 @@ export class RemoteDataSource {
   saveArticle(title, article) {
     const url = new URL("api/change/article/", location.href);
     url.searchParams.append("title", title);
-    url.searchParams.append("new_id", article.get("id"));
+    url.searchParams.append("new_id", article.get("id") || "");
     url.searchParams.append("new_title", article.get("title"));
     url.searchParams.append("new_text", article.get("text"));
 
