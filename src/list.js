@@ -52,7 +52,7 @@ export class BlogList {
           "a",
           {
             props: {
-              href: "./?article/" + preview.getId(),
+              href: "./?article/" + preview.getTitle(),
             },
           },
           [preview.getTitle()]
