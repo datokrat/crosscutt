@@ -14,3 +14,6 @@ class Article(models.Model):
     article_id = models.CharField(max_length=255, null=True)
     title = models.CharField(max_length=255)
     text = models.TextField()
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_modified_at = models.DateTimeField(auto_now=True)
