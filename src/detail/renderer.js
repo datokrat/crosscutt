@@ -15,9 +15,17 @@ export class ArticleDetailRenderer {
   }
 
   renderArticle() {
-    return this.model.getVisibleArticle() !== null
-      ? this.renderAvailableArticle()
-      : this.renderLoading();
+    if (this.model.isOk()) {
+      return this.model.getVisibleArticle() !== null
+        ? this.renderAvailableArticle()
+        : this.renderLoading();
+    } else {
+      return this.renderError();
+    }
+  }
+
+  renderError() {
+    return "Error";
   }
 
   renderAvailableArticle() {

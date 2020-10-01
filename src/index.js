@@ -49,5 +49,5 @@ function apply_new_vdom(new_vdom) {
 // }
 
 function get_route_from_location() {
-  return location.search.slice(1);
+  return decodeURIComponent(location.search.slice(1));
 }

@@ -12,15 +12,26 @@ export class DataSource {
 
   loadArticlePreviews() {
     return immediatePromise(
-      this.data.articles.map((article) => getPreview(article))
+      this.data.articles.map((article) =>
+        getArticlePreview(article.merge({ namespace: "public" }))
+      )
     );
   }
 
-  loadArticle(name) {
+  loadArticle(namespace, name) {
     const foundArticle = this.data.articles.find(
       (article) => article.get("id") === name || article.get("title") === name
     );
-    return immediatePromise(foundArticle !== undefined ? foundArticle : null);
+
+    const resultArticle =
+      namespace === "public" && foundArticle !== undefined
+        ? foundArticle.merge({
+            namespace: "public",
+            success: true,
+            permissions: "readonly",
+          })
+        : Map({ success: false, reason: "not found", permissions: "readonly" });
+    return immediatePromise(resultArticle);
   }
 
   loadReference(id) {
@@ -48,8 +59,9 @@ export class RemoteDataSource {
       });
   }
 
-  loadArticle(name) {
+  loadArticle(namespace, name) {
     const url = new URL("api/get/article/", location.href);
+    url.searchParams.append("namespace", namespace);
     url.searchParams.append("name", name);
     return fetch(url, { method: "get" })
       .then((response) => response.json())
@@ -58,8 +70,9 @@ export class RemoteDataSource {
       });
   }
 
-  saveArticle(title, article) {
+  saveArticle(namespace, title, article) {
     const url = new URL("api/change/article/", location.href);
+    url.searchParams.append("namespace", namespace);
     url.searchParams.append("title", title);
     url.searchParams.append("new_id", article.get("id") || "");
     url.searchParams.append("new_title", article.get("title"));
@@ -70,6 +83,7 @@ export class RemoteDataSource {
 
   createArticle(article) {
     const url = new URL("api/create/article/", location.href);
+    url.searchParams.append("namespace", article.get("namespace"));
     url.searchParams.append("id", article.get("id") || "");
     url.searchParams.append("title", article.get("title"));
     url.searchParams.append("text", article.get("text"));
@@ -79,6 +93,7 @@ export class RemoteDataSource {
 
   deserializePreview(data) {
     return new ArticlePreview({
+      namespace: data.namespace,
       id: data.id,
       title: data.title,
       description: data.description,
@@ -86,15 +101,7 @@ export class RemoteDataSource {
   }
 
   deserializeArticle(data) {
-    if (data.success) {
-      return Map({
-        id: data.id,
-        title: data.title,
-        text: data.text,
-      });
-    } else {
-      return null;
-    }
+    return Map(data);
   }
 }
 
@@ -104,6 +111,7 @@ function immediatePromise(value) {
 
 function getArticlePreview(article) {
   return new ArticlePreview({
+    namespace: article.get("namespace"),
     id: article.get("id"),
     title: article.get("title"),
     description: article.get("text").slice(0, 200),
@@ -111,10 +119,15 @@ function getArticlePreview(article) {
 }
 
 export class ArticlePreview {
-  constructor({ id, title, description }) {
+  constructor({ namespace, id, title, description }) {
+    this.namespace = namespace;
     this.id = id;
     this.title = title;
     this.description = description;
+  }
+
+  getNamespace() {
+    return this.namespace;
   }
 
   getId() {

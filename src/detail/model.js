@@ -2,6 +2,8 @@ import { Map } from "immutable";
 
 function initialState() {
   return Map({
+    isOk: true,
+    isReadOnly: null,
     savedArticle: null,
     editedArticle: null,
     isCreating: false,
@@ -9,10 +11,13 @@ function initialState() {
   });
 }
 
-function initialCreateState(name) {
+function initialCreateState(namespace, name) {
   return Map({
+    isOk: true,
+    isReadOnly: false,
     savedArticle: null,
     editedArticle: Map({
+      namespace: namespace,
       id: null,
       title: name,
       text: "",
@@ -22,8 +27,16 @@ function initialCreateState(name) {
   });
 }
 
-function readonlyArticleState(article) {
+function errorState() {
   return Map({
+    isOk: false,
+  });
+}
+
+function readonlyArticleState(article, isReadOnly) {
+  return Map({
+    isOk: true,
+    isReadOnly: isReadOnly,
     savedArticle: article,
     editedArticle: null,
     isCreating: false,
@@ -100,6 +113,10 @@ export class Model {
     this.notify();
   }
 
+  isOk() {
+    return this.state.get("isOk");
+  }
+
   isSaved() {
     return isSaved(this.state);
   }
@@ -125,25 +142,42 @@ export class Model {
   }
 
   start(path) {
-    const name = decodeURIComponent(path);
-    this.dataSource.loadArticle(name).then((article) => {
-      if (article !== null) {
+    const slashIndex = path.indexOf("/");
+
+    if (slashIndex === -1) {
+      throw new Error("Invalid path");
+    }
+
+    const namespace = path.slice(0, slashIndex);
+    const name = path.slice(slashIndex + 1);
+    this.dataSource.loadArticle(namespace, name).then((article) => {
+      if (article.get("success")) {
         // if article already exists, show it
-        this.showArticle(article);
-      } else {
+        this.showArticle(article, article.get("permissions") !== "full");
+      } else if (article.get("reason") === "not found") {
         // if article does not exist yet, create
-        this.startCreating(name);
+        if (article.get("permissions") === "full") {
+          this.startCreating(namespace, name);
+        } else {
+          this.showError();
+        }
+      } else {
+        this.showError();
       }
     });
   }
 
-  showArticle(article) {
-    this.updateState(() => readonlyArticleState(article));
+  showArticle(article, isReadOnly) {
+    this.updateState(() => readonlyArticleState(article, isReadOnly));
   }
 
-  startCreating(name) {
+  showError() {
+    this.updateState(() => errorState());
+  }
+
+  startCreating(namespace, name) {
     this.ensureCanEdit();
-    this.updateState(() => initialCreateState(name));
+    this.updateState(() => initialCreateState(namespace, name));
   }
 
   startEditing() {
@@ -159,6 +193,7 @@ export class Model {
     if (!this.isCreating()) {
       this.dataSource
         .saveArticle(
+          this.state.getIn(["savedArticle", "namespace"]),
           this.state.getIn(["savedArticle", "title"]),
           updatedArticle
         )
@@ -177,7 +212,7 @@ export class Model {
   }
 
   canEdit() {
-    return !this.dataSource.isReadOnly();
+    return !this.state.get("isReadOnly");
   }
 
   ensureCanEdit() {

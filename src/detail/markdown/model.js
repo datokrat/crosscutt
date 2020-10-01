@@ -6,6 +6,8 @@ export class MarkdownModel {
 
     this.willApplyMarkdown = false;
     this.article = null;
+
+    this.namespace = null;
     this.ast = null;
     this.title = null;
     this.collapsedSections = new Set();
@@ -17,6 +19,10 @@ export class MarkdownModel {
 
   getTitle() {
     return this.title;
+  }
+
+  getNamespace() {
+    return this.namespace;
   }
 
   isSectionCollapsed(sectionId) {
@@ -52,6 +58,7 @@ export class MarkdownModel {
 
   applyMarkdown() {
     const text = this.article.get("text");
+    this.namespace = this.article.get("namespace");
     this.title = this.article.get("title");
     this.ast = parseMarkdown(text).toJS();
 

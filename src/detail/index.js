@@ -20,7 +20,9 @@ export class ArticleDetail {
   }
 
   onStateChanged() {
-    this.markdownModel.onArticleChanged(this.model.getVisibleArticle());
+    if (this.model.isOk()) {
+      this.markdownModel.onArticleChanged(this.model.getVisibleArticle());
+    }
     this.notify();
   }
 

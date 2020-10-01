@@ -122,7 +122,15 @@ export class Renderer {
         return h(
           "a",
           {
-            props: { href: "./?article/" + item.path },
+            props: {
+              href:
+                "./?article/" +
+                (item.namespace !== null
+                  ? item.namespace
+                  : this.model.getNamespace()) +
+                "/" +
+                item.path,
+            },
           },
           [item.content]
         );

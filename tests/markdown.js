@@ -127,13 +127,28 @@ describe("Markdown", () => {
     );
   });
 
-  it("internal link to article", () => {
+  it("internal link to article in the same namespace", () => {
     assert.deepEqual(parseMarkdownParagraph("[[caption|article]]"), {
       type: "paragraph",
       content: [
         {
           type: "article-link",
           content: "caption",
+          namespace: null,
+          path: "article",
+        },
+      ],
+    });
+  });
+
+  it("internal link to article in another namespace", () => {
+    assert.deepEqual(parseMarkdownParagraph("[[caption|@paul/article]]"), {
+      type: "paragraph",
+      content: [
+        {
+          type: "article-link",
+          content: "caption",
+          namespace: "paul",
           path: "article",
         },
       ],
@@ -149,6 +164,7 @@ describe("Markdown", () => {
           {
             type: "article-link",
             content: "caption",
+            namespace: null,
             path: "reference:article",
           },
         ],
@@ -168,7 +184,28 @@ describe("Markdown", () => {
   it("link without |", () => {
     assert.deepEqual(parseMarkdownParagraph("[[caption]]"), {
       type: "paragraph",
-      content: [{ type: "article-link", content: "caption", path: "caption" }],
+      content: [
+        {
+          type: "article-link",
+          content: "caption",
+          namespace: null,
+          path: "caption",
+        },
+      ],
+    });
+  });
+
+  it("link to another namespace without |", () => {
+    assert.deepEqual(parseMarkdownParagraph("[[@paul/caption]]"), {
+      type: "paragraph",
+      content: [
+        {
+          type: "article-link",
+          content: "@paul/caption",
+          namespace: "paul",
+          path: "caption",
+        },
+      ],
     });
   });
 

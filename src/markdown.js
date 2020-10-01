@@ -387,11 +387,13 @@ export function parseLeadingLink(markdown) {
   if (relativeDelimiterPos === -1) {
     const caption = betweenBraces;
     const rest = markdown.slice(endingBracePos + 2);
+    const { namespace, name } = parseLinkTarget(caption);
     return [
       {
         type: "article-link",
         content: caption,
-        path: caption,
+        namespace: namespace,
+        path: name,
       },
       rest,
     ];
@@ -422,10 +424,33 @@ export function parseLeadingLink(markdown) {
   } else if (address.startsWith("http://") || address.startsWith("https://")) {
     return [{ type: "link", content: caption, address: address }, rest];
   } else {
+    const { namespace, name } = parseLinkTarget(unescape(address));
     return [
-      { type: "article-link", content: caption, path: unescape(address) },
+      {
+        type: "article-link",
+        content: caption,
+        namespace: namespace,
+        path: name,
+      },
       rest,
     ];
+  }
+}
+
+function parseLinkTarget(path) {
+  if (path.startsWith("@")) {
+    const slashIndex = path.indexOf("/");
+    if (slashIndex !== -1) {
+      return {
+        namespace: path.slice(1, slashIndex),
+        name: path.slice(slashIndex + 1),
+      };
+    }
+  } else {
+    return {
+      namespace: null,
+      name: path,
+    };
   }
 }
 
