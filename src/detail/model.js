@@ -9,12 +9,12 @@ function initialState() {
   });
 }
 
-function initialCreateState(id) {
+function initialCreateState(name) {
   return Map({
     savedArticle: null,
     editedArticle: Map({
-      id: id,
-      title: "",
+      id: null,
+      title: name,
       text: "",
     }),
     isCreating: true,
@@ -56,6 +56,10 @@ function completeSaving(state, article) {
     .set("isSaving", false)
     .set("isCreating", false)
     .set("savedArticle", article);
+}
+
+function changeEditedId(state, id) {
+  return state.setIn(["editedArticle", "id"], id);
 }
 
 function changeEditedTitle(state, title) {
@@ -120,14 +124,15 @@ export class Model {
     return this.state.getIn(["editedArticle", field]);
   }
 
-  start(id) {
-    this.dataSource.loadArticle(id).then((article) => {
+  start(path) {
+    const name = decodeURIComponent(path);
+    this.dataSource.loadArticle(name).then((article) => {
       if (article !== null) {
         // if article already exists, show it
         this.showArticle(article);
       } else {
         // if article does not exist yet, create
-        this.startCreating(id);
+        this.startCreating(name);
       }
     });
   }
@@ -136,9 +141,9 @@ export class Model {
     this.updateState(() => readonlyArticleState(article));
   }
 
-  startCreating(id) {
+  startCreating(name) {
     this.ensureCanEdit();
-    this.updateState(() => initialCreateState(id));
+    this.updateState(() => initialCreateState(name));
   }
 
   startEditing() {
@@ -153,7 +158,10 @@ export class Model {
 
     if (!this.isCreating()) {
       this.dataSource
-        .saveArticle(this.state.getIn(["savedArticle", "id"]), updatedArticle)
+        .saveArticle(
+          this.state.getIn(["savedArticle", "title"]),
+          updatedArticle
+        )
         .then(() => {
           this.updateState((state) => completeSaving(state, updatedArticle));
         });
@@ -176,6 +184,11 @@ export class Model {
     if (!this.canEdit()) {
       throw new Error("data source is read-only, cannot edit articles");
     }
+  }
+
+  changeEditedId(id) {
+    this.state = changeEditedId(this.state, id);
+    this.notify();
   }
 
   changeEditedTitle(title) {

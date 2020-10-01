@@ -16,9 +16,9 @@ export class DataSource {
     );
   }
 
-  loadArticle(id) {
+  loadArticle(name) {
     const foundArticle = this.data.articles.find(
-      (article) => article.get("id") === id
+      (article) => article.get("id") === name || article.get("title") === name
     );
     return immediatePromise(foundArticle !== undefined ? foundArticle : null);
   }
@@ -48,9 +48,9 @@ export class RemoteDataSource {
       });
   }
 
-  loadArticle(id) {
+  loadArticle(name) {
     const url = new URL("api/get/article/", location.href);
-    url.searchParams.append("id", id);
+    url.searchParams.append("name", name);
     return fetch(url, { method: "get" })
       .then((response) => response.json())
       .then((jsonData) => {
@@ -58,9 +58,9 @@ export class RemoteDataSource {
       });
   }
 
-  saveArticle(id, article) {
+  saveArticle(title, article) {
     const url = new URL("api/change/article/", location.href);
-    url.searchParams.append("id", id);
+    url.searchParams.append("title", title);
     url.searchParams.append("new_id", article.get("id"));
     url.searchParams.append("new_title", article.get("title"));
     url.searchParams.append("new_text", article.get("text"));

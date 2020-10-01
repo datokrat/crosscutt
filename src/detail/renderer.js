@@ -37,6 +37,21 @@ export class ArticleDetailRenderer {
                 "input.form-control",
                 {
                   on: {
+                    input: (e) =>
+                      this.model.changeEditedId(e.target.value || null),
+                  },
+                  props: {
+                    type: "text",
+                    placeholder: "Short ID",
+                    value: this.model.getEditedArticleField("id") || "",
+                  },
+                },
+                []
+              ),
+              h(
+                "input.form-control",
+                {
+                  on: {
                     input: (e) => this.model.changeEditedTitle(e.target.value),
                   },
                   props: {
