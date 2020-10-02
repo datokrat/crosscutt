@@ -1,238 +1,244 @@
+import { LocatorSerializationService } from "../domain/locator";
 import { Map } from "immutable";
 
-function initialState() {
-  return Map({
-    isOk: true,
-    isReadOnly: null,
-    savedArticle: null,
-    editedArticle: null,
-    isCreating: false,
-    isSaving: false,
-  });
-}
+/*
+ * State :
+ * {
+ *   mode: "load",
+ * } | {
+ *   mode: "error",
+ *   message: string,
+ * } |
+ * {
+ *   mode: "read",
+ *   article: Article,
+ * } | {
+ *   mode: "edit",
+ *   article: Article,
+ *   draft: Draft,
+ * } | {
+ *   mode: "create",
+ *   draft: Draft,
+ * }
+ *
+ * context = {
+ *   notify,
+ *   transition,
+ *   dataSource,
+ *   editor,
+ * }
+ */
 
-function initialCreateState(namespace, name) {
-  return Map({
-    isOk: true,
-    isReadOnly: false,
-    savedArticle: null,
-    editedArticle: Map({
-      namespace: namespace,
-      id: null,
-      title: name,
-      text: "",
-    }),
-    isCreating: true,
-    isSaving: false,
-  });
-}
-
-function errorState() {
-  return Map({
-    isOk: false,
-  });
-}
-
-function readonlyArticleState(article, isReadOnly) {
-  return Map({
-    isOk: true,
-    isReadOnly: isReadOnly,
-    savedArticle: article,
-    editedArticle: null,
-    isCreating: false,
-    isSaving: false,
-  });
-}
-
-function startEditing(state) {
-  return state.merge({
-    editedArticle: state.get("savedArticle"),
-  });
-}
-
-function abortEditing(state) {
-  if (state.get("isCreating")) {
-    throw new Error("Cannot abort creating an article.");
+export class LoadState {
+  constructor(locator) {
+    this.locator = locator;
   }
 
-  return state.merge({
-    editedArticle: null,
-  });
-}
-
-function startSaving(state) {
-  return state.set("isSaving", true);
-}
-
-function completeSaving(state, article) {
-  return state
-    .set("isSaving", false)
-    .set("isCreating", false)
-    .set("savedArticle", article);
-}
-
-function changeEditedId(state, id) {
-  return state.setIn(["editedArticle", "id"], id);
-}
-
-function changeEditedTitle(state, title) {
-  return state.setIn(["editedArticle", "title"], title);
-}
-
-function changeEditedText(state, text) {
-  return state.setIn(["editedArticle", "text"], text);
-}
-
-function isSaved(state) {
-  if (state.get("savedArticle") === null) {
-    return false;
+  init(context) {
+    this.context = context;
+    this.context.editor.setDraftData(null);
+    this.context.editor.setIsEditable(false);
+    this.context.dataSource
+      .loadArticle(this.locator)
+      .then((article) => this.acceptArticle(article))
+      .catch((e) => this.acceptErrorMessage(e));
   }
 
-  return state.get("savedArticle").equals(state.get("editedArticle"));
-}
-
-function isEditing(state) {
-  return state.get("editedArticle") !== null;
-}
-
-function visibleArticle(state) {
-  return isEditing(state)
-    ? state.get("editedArticle")
-    : state.get("savedArticle");
-}
-
-export class Model {
-  constructor(notify, dataSource) {
-    this.notify = notify;
-    this.dataSource = dataSource;
-    this.state = initialState();
+  getMode() {
+    return "load";
   }
 
-  updateState(updater) {
-    this.state = updater(this.state);
-    this.notify();
+  // private
+
+  acceptArticle(article) {
+    this.context.transition(new ReadState(article));
   }
 
-  isOk() {
-    return this.state.get("isOk");
-  }
-
-  isSaved() {
-    return isSaved(this.state);
-  }
-
-  isEditing() {
-    return isEditing(this.state);
-  }
-
-  isSaving() {
-    return this.state.get("isSaving");
-  }
-
-  isCreating() {
-    return this.state.get("isCreating");
-  }
-
-  getVisibleArticle() {
-    return visibleArticle(this.state);
-  }
-
-  getEditedArticleField(field) {
-    return this.state.getIn(["editedArticle", field]);
-  }
-
-  start(path) {
-    const slashIndex = path.indexOf("/");
-
-    if (slashIndex === -1) {
-      throw new Error("Invalid path");
-    }
-
-    const namespace = path.slice(0, slashIndex);
-    const name = path.slice(slashIndex + 1);
-    this.dataSource.loadArticle(namespace, name).then((article) => {
-      if (article.get("success")) {
-        // if article already exists, show it
-        this.showArticle(article, article.get("permissions") !== "full");
-      } else if (article.get("reason") === "not found") {
-        // if article does not exist yet, create
-        if (article.get("permissions") === "full") {
-          this.startCreating(namespace, name);
+  acceptErrorMessage(error) {
+    switch (error.reason) {
+      case "not found":
+        // SMELL: encapsulate permission logic in domain
+        if (error.data.permissions === "full") {
+          this.context.transition(new CreateState(this.locator));
         } else {
-          this.showError();
+          this.context.transition(new ErrorState(error.reason));
         }
-      } else {
-        this.showError();
-      }
-    });
-  }
-
-  showArticle(article, isReadOnly) {
-    this.updateState(() => readonlyArticleState(article, isReadOnly));
-  }
-
-  showError() {
-    this.updateState(() => errorState());
-  }
-
-  startCreating(namespace, name) {
-    this.ensureCanEdit();
-    this.updateState(() => initialCreateState(namespace, name));
-  }
-
-  startEditing() {
-    this.ensureCanEdit();
-    this.updateState((state) => startEditing(state));
-  }
-
-  save() {
-    this.updateState((state) => startSaving(state));
-
-    const updatedArticle = this.state.get("editedArticle");
-
-    if (!this.isCreating()) {
-      this.dataSource
-        .saveArticle(
-          this.state.getIn(["savedArticle", "namespace"]),
-          this.state.getIn(["savedArticle", "title"]),
-          updatedArticle
-        )
-        .then(() => {
-          this.updateState((state) => completeSaving(state, updatedArticle));
-        });
-    } else {
-      this.dataSource.createArticle(updatedArticle).then(() => {
-        this.updateState((state) => completeSaving(state, updatedArticle));
-      });
+        break;
+      default:
+        this.context.transition(new ErrorState(error.reason));
     }
+  }
+}
+
+export class ErrorState {
+  constructor(reason) {
+    this.reason = reason;
+  }
+
+  init(context) {
+    context.editor.setIsEditable(false);
+    context.editor.setDraftData(null);
+  }
+
+  getMode() {
+    return "error";
+  }
+
+  getReason() {
+    return this.reason;
+  }
+}
+
+export class CreateState {
+  constructor(locator) {
+    this.locator = locator;
+  }
+
+  init(context) {
+    this.context = context;
+    this.isSaving = false;
+
+    this.context.editor.setDraftData(
+      Map({
+        namespace: this.locator.getNamespace(),
+        id: null,
+        title: this.locator.getName(),
+        text: "",
+      })
+    );
+    this.context.editor.setIsEditable(true);
+    this.context.notify();
+  }
+
+  getMode() {
+    return "create";
+  }
+
+  getDraft() {
+    return this.draft;
+  }
+
+  getIsSaving() {
+    return this.isSaving;
+  }
+
+  create() {
+    this.isSaving = true;
+    this.context.notify();
+
+    this.context.dataSource
+      .createArticle(this.context.editor.getDraftData())
+      .then((article) => this.onArticleCreated(article));
+  }
+
+  onArticleCreated(article) {
+    this.isSaving = false;
+    this.context.transition(
+      new EditState(article, this.context.editor.getDraftData())
+    );
+  }
+}
+
+export class EditState {
+  constructor(article, draftData) {
+    this.article = article;
+    this.draftData = draftData;
+  }
+
+  init(context) {
+    this.context = context;
+    this.isSaving = false;
+
+    this.context.editor.setDraftData(this.draftData);
+    this.context.editor.setIsEditable(true);
+    delete this.draftData;
+
+    this.context.notify();
+  }
+
+  getMode() {
+    return "edit";
+  }
+
+  getIsSaving() {
+    return this.isSaving;
+  }
+
+  getIsSaved() {
+    return this.article.getData().equals(this.context.editor.getDraftData());
   }
 
   abortEditing() {
-    this.updateState((state) => abortEditing(state));
+    this.context.transition(new ReadState(this.article));
   }
 
-  canEdit() {
-    return !this.state.get("isReadOnly");
+  save() {
+    this.isSaving = true;
+    this.context.notify();
+
+    this.context.dataSource
+      .saveArticle(this.article, this.context.editor.getDraftData())
+      .then((article) => this.onArticleSaved(article));
   }
 
-  ensureCanEdit() {
-    if (!this.canEdit()) {
-      throw new Error("data source is read-only, cannot edit articles");
-    }
+  onArticleSaved(article) {
+    this.article = article;
+    this.isSaving = false;
+    this.context.notify();
+  }
+}
+
+export class ReadState {
+  constructor(article) {
+    this.article = article;
   }
 
-  changeEditedId(id) {
-    this.state = changeEditedId(this.state, id);
-    this.notify();
+  init(context) {
+    this.context = context;
+    this.context.editor.setIsEditable(false);
+    this.context.editor.setDraftData(this.article.getData());
+    this.context.notify();
   }
 
-  changeEditedTitle(title) {
-    this.state = changeEditedTitle(this.state, title);
-    this.notify();
+  getMode() {
+    return "read";
   }
 
-  changeEditedText(text) {
-    this.state = changeEditedText(this.state, text);
-    this.notify();
+  isReadOnly() {
+    return this.article.isReadOnly();
+  }
+
+  edit() {
+    this.context.transition(
+      new EditState(this.article, this.article.getData())
+    );
+  }
+}
+
+export class Model {
+  constructor(notify, dataSource, editor) {
+    this.notify = notify;
+    this.dataSource = dataSource;
+    this.editor = editor;
+  }
+
+  start(path) {
+    const locator = LocatorSerializationService.deserialize(path);
+    const context = {
+      notify: this.notify,
+      transition: (nextState) => {
+        this.state = nextState;
+        this.state.init(context);
+      },
+      dataSource: this.dataSource,
+      editor: this.editor,
+    };
+
+    this.state = new LoadState(locator);
+    this.state.init(context);
+  }
+
+  getState() {
+    return this.state;
   }
 }

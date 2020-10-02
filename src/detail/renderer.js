@@ -2,9 +2,13 @@ import { h } from "snabbdom/build/package/h";
 import { renderNavigation } from "../skeleton";
 
 export class ArticleDetailRenderer {
-  constructor(model, markdownRenderer) {
+  constructor(model, editor) {
     this.model = model;
-    this.markdownRenderer = markdownRenderer;
+    this.editor = editor;
+  }
+
+  getModelState() {
+    return this.model.getState();
   }
 
   render() {
@@ -15,88 +19,24 @@ export class ArticleDetailRenderer {
   }
 
   renderArticle() {
-    if (this.model.isOk()) {
-      return this.model.getVisibleArticle() !== null
-        ? this.renderAvailableArticle()
-        : this.renderLoading();
-    } else {
-      return this.renderError();
+    switch (this.getModelState().getMode()) {
+      case "load":
+        return this.renderLoading();
+      case "error":
+        return this.renderError(this.getModelState().getReason());
+      case "read":
+        return this.renderRead();
+      case "create":
+        return this.renderCreate();
+      case "edit":
+        return this.renderEdit();
+      default:
+        return this.renderError("Error");
     }
   }
 
-  renderError() {
-    return "Error";
-  }
-
-  renderAvailableArticle() {
-    if (!this.model.isEditing()) {
-      return h("div.article", [
-        this.renderNormalViewToolbar(),
-        h("div.article-markdown.my-3", [
-          this.markdownRenderer.renderArticleMarkdown(),
-        ]),
-      ]);
-    } else {
-      return h("div.article", [
-        h("div.row.my-3", [
-          h("div.col-sm.col-sm-6", [
-            h("div.form-group", [
-              h(
-                "input.form-control",
-                {
-                  on: {
-                    input: (e) =>
-                      this.model.changeEditedId(e.target.value || null),
-                  },
-                  props: {
-                    type: "text",
-                    placeholder: "Short ID",
-                    value: this.model.getEditedArticleField("id") || "",
-                  },
-                },
-                []
-              ),
-              h(
-                "input.form-control",
-                {
-                  on: {
-                    input: (e) => this.model.changeEditedTitle(e.target.value),
-                  },
-                  props: {
-                    type: "text",
-                    placeholder: "Title",
-                    value: this.model.getEditedArticleField("title"),
-                  },
-                },
-                []
-              ),
-              h(
-                "textarea.form-control.article-text-editor",
-                {
-                  hook: {
-                    insert: (vnode) => this.adjustTextareaSize(vnode.elm),
-                  },
-                  on: {
-                    input: (e) => {
-                      this.model.changeEditedText(e.target.value);
-                      this.adjustTextareaSize(e.target);
-                    },
-                  },
-                  props: { placeholder: "Text" },
-                },
-                [this.model.getEditedArticleField("text")]
-              ),
-            ]),
-          ]),
-          h("div.col-sm.col-sm-6", [
-            h("div.article-markdown", [
-              this.renderEditingToolbar(),
-              this.markdownRenderer.renderArticleMarkdown(),
-            ]),
-          ]),
-        ]),
-      ]);
-    }
+  renderError(message) {
+    return message;
   }
 
   renderLoading() {
@@ -105,8 +45,20 @@ export class ArticleDetailRenderer {
     ]);
   }
 
+  renderRead() {
+    return this.editor.render(this.renderNormalViewToolbar());
+  }
+
+  renderEdit() {
+    return this.editor.render(this.renderEditingToolbar());
+  }
+
+  renderCreate() {
+    return this.editor.render(this.renderCreatingToolbar());
+  }
+
   renderNormalViewToolbar() {
-    if (!this.model.canEdit()) {
+    if (this.getModelState().isReadOnly()) {
       return null;
     }
 
@@ -115,7 +67,7 @@ export class ArticleDetailRenderer {
         "button.btn.btn-secondary.float-right",
         {
           props: { type: "button" },
-          on: { click: () => this.model.startEditing() },
+          on: { click: () => this.getModelState().edit() },
         },
         ["✎ Edit"]
       ),
@@ -123,13 +75,9 @@ export class ArticleDetailRenderer {
   }
 
   renderEditingToolbar() {
-    if (!this.model.canEdit()) {
-      return null;
-    }
-
     return h("span.button-save.float-right", [
-      !this.model.isSaving()
-        ? !this.model.isSaved()
+      !this.getModelState().getIsSaving()
+        ? !this.getModelState().getIsSaved()
           ? this.renderSaveButton()
           : this.renderSavedIndicator()
         : this.renderSavingIndicator(),
@@ -138,14 +86,34 @@ export class ArticleDetailRenderer {
     ]);
   }
 
+  renderCreatingToolbar() {
+    return h("span.button-save.float-right", [
+      !this.getModelState().getIsSaving()
+        ? this.renderCreateButton()
+        : this.renderSavingIndicator(),
+      " ",
+    ]);
+  }
+
   renderSaveButton() {
     return h(
       "button.btn.btn-primary",
       {
         props: { type: "button", disabled: false },
-        on: { click: () => this.model.save() },
+        on: { click: () => this.getModelState().save() },
       },
       ["Save"]
+    );
+  }
+
+  renderCreateButton() {
+    return h(
+      "button.btn.btn-primary",
+      {
+        props: { type: "button", disabled: false },
+        on: { click: () => this.getModelState().save() },
+      },
+      ["Create"]
     );
   }
 
@@ -170,21 +138,14 @@ export class ArticleDetailRenderer {
   }
 
   renderAbortButton() {
-    if (this.model.isCreating()) {
-      return null;
-    }
-
-    const isDisabled = this.model.isSaving();
-    const on = isDisabled ? {} : { click: () => this.model.abortEditing() };
+    const isDisabled = this.getModelState().getIsSaving();
+    const on = isDisabled
+      ? {}
+      : { click: () => this.getModelState().abortEditing() };
     return h(
       "button.btn.btn-secondary",
       { props: { type: "button", disabled: isDisabled }, on },
       ["Stop Editing"]
     );
-  }
-
-  adjustTextareaSize(textarea) {
-    textarea.style.height = "auto";
-    textarea.style.height = textarea.scrollHeight + "px";
   }
 }

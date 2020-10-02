@@ -5,7 +5,7 @@ import { propsModule } from "snabbdom/build/package/modules/props";
 import { datasetModule } from "snabbdom/build/package/modules/dataset";
 import { attributesModule } from "snabbdom/build/package/modules/attributes";
 
-import { DataSource } from "./data-source";
+import { dataSource } from "./settings";
 import { App } from "./app";
 
 const patch = init([
@@ -22,7 +22,7 @@ const app = new App(
   () => {
     apply_new_vdom(app.render());
   },
-  { dataSource: new DataSource() }
+  { dataSource }
 );
 
 window.addEventListener("load", () => {

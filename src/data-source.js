@@ -1,13 +1,18 @@
 import { getSeed } from "./data-seed";
-import { Map } from "immutable";
+import { LocatorSerializationService } from "./domain/locator";
+import { Article, ArticleSerializationService } from "./domain/article";
+
+export class RequestFailureException extends Error {
+  constructor(reason, data) {
+    super(reason);
+    this.reason = reason;
+    this.data = data;
+  }
+}
 
 export class DataSource {
   constructor() {
     this.data = getSeed();
-  }
-
-  isReadOnly() {
-    return true;
   }
 
   loadArticlePreviews() {
@@ -18,19 +23,28 @@ export class DataSource {
     );
   }
 
-  loadArticle(namespace, name) {
+  loadArticle(locator) {
+    const name = locator.getName();
+    const namespace = locator.getNamespace();
     const foundArticle = this.data.articles.find(
       (article) => article.get("id") === name || article.get("title") === name
     );
 
-    const resultArticle =
-      namespace === "public" && foundArticle !== undefined
-        ? foundArticle.merge({
-            namespace: "public",
-            success: true,
-            permissions: "readonly",
-          })
-        : Map({ success: false, reason: "not found", permissions: "readonly" });
+    if (namespace !== "public" || foundArticle === undefined) {
+      return immediatelyRejectedPromise(
+        new RequestFailureException("not found", {
+          permissions: "readonly",
+        })
+      );
+    }
+
+    const resultArticle = new Article(
+      foundArticle.merge({
+        namespace: "public",
+      }),
+      "readonly"
+    );
+
     return immediatePromise(resultArticle);
   }
 
@@ -45,10 +59,6 @@ export class DataSource {
 }
 
 export class RemoteDataSource {
-  isReadOnly() {
-    return false;
-  }
-
   loadArticlePreviews() {
     return fetch("./api/get/previews/", { method: "get" })
       .then((response) => response.json())
@@ -59,26 +69,31 @@ export class RemoteDataSource {
       });
   }
 
-  loadArticle(namespace, name) {
+  loadArticle(locator) {
     const url = new URL("api/get/article/", location.href);
-    url.searchParams.append("namespace", namespace);
-    url.searchParams.append("name", name);
+    url.searchParams.append(
+      "locator",
+      LocatorSerializationService.serialize(locator)
+    );
     return fetch(url, { method: "get" })
       .then((response) => response.json())
-      .then((jsonData) => {
-        return this.deserializeArticle(jsonData);
-      });
+      .then((jsonData) => this.deserializeArticle(jsonData));
   }
 
-  saveArticle(namespace, title, article) {
+  saveArticle(article, updatedData) {
     const url = new URL("api/change/article/", location.href);
-    url.searchParams.append("namespace", namespace);
-    url.searchParams.append("title", title);
-    url.searchParams.append("new_id", article.get("id") || "");
-    url.searchParams.append("new_title", article.get("title"));
-    url.searchParams.append("new_text", article.get("text"));
+    url.searchParams.append(
+      "locator",
+      LocatorSerializationService.serialize(article.getTitleBasedLocator())
+    );
+    url.searchParams.append("new_namespace", updatedData.get("namespace"));
+    url.searchParams.append("new_id", updatedData.get("id") || "");
+    url.searchParams.append("new_title", updatedData.get("title"));
+    url.searchParams.append("new_text", updatedData.get("text"));
 
-    return fetch(url, { method: "get" }).then((response) => response.json());
+    return fetch(url, { method: "get" })
+      .then((response) => response.json())
+      .then((jsonData) => this.deserializeArticle(jsonData));
   }
 
   createArticle(article) {
@@ -88,7 +103,9 @@ export class RemoteDataSource {
     url.searchParams.append("title", article.get("title"));
     url.searchParams.append("text", article.get("text"));
 
-    return fetch(url, { method: "get" }).then((response) => response.json());
+    return fetch(url, { method: "get" })
+      .then((response) => response.json())
+      .then((jsonData) => this.deserializeArticle(jsonData));
   }
 
   deserializePreview(data) {
@@ -101,12 +118,22 @@ export class RemoteDataSource {
   }
 
   deserializeArticle(data) {
-    return Map(data);
+    if (data.success) {
+      return ArticleSerializationService.deserialize(data.article);
+    } else {
+      throw new RequestFailureException(data.reason, {
+        permissions: data.permissions,
+      });
+    }
   }
 }
 
 function immediatePromise(value) {
   return new Promise((resolve) => resolve(value));
+}
+
+function immediatelyRejectedPromise(error) {
+  return new Promise((_, reject) => reject(error));
 }
 
 function getArticlePreview(article) {
