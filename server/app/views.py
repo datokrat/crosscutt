@@ -5,6 +5,7 @@ from django.db.models import Q
 from django.utils import timezone
 from .models import Article
 from .permissions import crosscutt_permissions
+from django.views.decorators.csrf import csrf_exempt
 
 class ArticleIntegrityException(Exception):
     pass
@@ -41,11 +42,12 @@ def get_article(request):
             "reason": "not found",
         })
 
+@csrf_exempt
 def create_article(request):
-    id = parseId(request.GET["id"])
-    title = request.GET["title"]
-    text = request.GET["text"]
-    namespace = request.GET["namespace"]
+    id = parseId(request.POST["id"])
+    title = request.POST["title"]
+    text = request.POST["text"]
+    namespace = request.POST["namespace"]
     permissions = get_permissions(request.user, namespace)
 
     if permissions != "full":
@@ -71,13 +73,14 @@ def create_article(request):
         "success": True,
     })
 
+@csrf_exempt
 def change_article(request):
-    namespace = request.GET["namespace"]
-    title = request.GET["title"]
-    new_namespace = request.GET["namespace"]
-    new_id = parseId(request.GET["new_id"])
-    new_title = request.GET["new_title"]
-    new_text = request.GET["new_text"]
+    namespace = request.POST["namespace"]
+    title = request.POST["title"]
+    new_namespace = request.POST["namespace"]
+    new_id = parseId(request.POST["new_id"])
+    new_title = request.POST["new_title"]
+    new_text = request.POST["new_text"]
     permissions = get_permissions(request.user, namespace)
 
     if permissions != "full":

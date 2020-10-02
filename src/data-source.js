@@ -72,23 +72,29 @@ export class RemoteDataSource {
 
   saveArticle(namespace, title, article) {
     const url = new URL("api/change/article/", location.href);
-    url.searchParams.append("namespace", namespace);
-    url.searchParams.append("title", title);
-    url.searchParams.append("new_id", article.get("id") || "");
-    url.searchParams.append("new_title", article.get("title"));
-    url.searchParams.append("new_text", article.get("text"));
+    const params = new URLSearchParams();
+    params.append("namespace", namespace);
+    params.append("title", title);
+    params.append("new_id", article.get("id") || "");
+    params.append("new_title", article.get("title"));
+    params.append("new_text", article.get("text"));
 
-    return fetch(url, { method: "get" }).then((response) => response.json());
+    return fetch(url, { method: "post", body: params }).then((response) =>
+      response.json()
+    );
   }
 
   createArticle(article) {
     const url = new URL("api/create/article/", location.href);
-    url.searchParams.append("namespace", article.get("namespace"));
-    url.searchParams.append("id", article.get("id") || "");
-    url.searchParams.append("title", article.get("title"));
-    url.searchParams.append("text", article.get("text"));
+    const params = new URLSearchParams();
+    params.append("namespace", article.get("namespace"));
+    params.append("id", article.get("id") || "");
+    params.append("title", article.get("title"));
+    params.append("text", article.get("text"));
 
-    return fetch(url, { method: "get" }).then((response) => response.json());
+    return fetch(url, { method: "post", body: params }).then((response) =>
+      response.json()
+    );
   }
 
   deserializePreview(data) {
