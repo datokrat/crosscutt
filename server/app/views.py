@@ -3,9 +3,11 @@ from django.http import JsonResponse
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
-from .models import Article
+from .models import Article as DbArticle
 from .permissions import crosscutt_permissions
 from django.views.decorators.csrf import csrf_exempt
+from .domain.locator import LocatorSerializationService
+from .domain.article import Article, ArticleSerializationService
 
 class ArticleIntegrityException(Exception):
     pass
@@ -14,8 +16,10 @@ def get_previews(request):
     return JsonResponse(getPreviewsJson(request.user))
 
 def get_article(request):
-    name = request.GET["name"]
-    namespace = request.GET["namespace"]
+    locator = LocatorSerializationService.deserialize(request.GET["locator"])
+
+    name = locator.getName()
+    namespace = locator.getNamespace()
     permissions = get_permissions(request.user, namespace)
 
     if permissions != "full" and permissions != "readonly":
@@ -24,23 +28,30 @@ def get_article(request):
             "reason": "forbidden",
         })
 
-    queryset = Article.objects.filter(Q(namespace=namespace) & (Q(article_id=name) | Q(title=name)))
+    queryset = DbArticle.objects.filter(filter_by_locator(locator))
     if queryset.exists():
         article = queryset.get()
-        return JsonResponse({
-            "success": True,
-            "permissions": permissions,
-            "namespace": article.namespace,
-            "id": article.article_id,
-            "title": article.title,
-            "text": article.text,
-        })
+        return JsonResponse(serialize_article_and_permissions(article, permissions))
     else:
         return JsonResponse({
             "success": False,
             "permissions": permissions,
             "reason": "not found",
         })
+
+def filter_by_locator(locator):
+    return Q(namespace=locator.getNamespace()) & (Q(article_id=locator.getName()) | Q(title=locator.getName()))
+
+def serialize_article_and_permissions(db_article, permissions):
+    return {
+        "success": True,
+        "article": ArticleSerializationService.serialize(Article({
+            "namespace": db_article.namespace,
+            "id": db_article.article_id,
+            "title": db_article.title,
+            "text": db_article.text,
+        }, permissions))
+    }
 
 @csrf_exempt
 def create_article(request):
@@ -58,7 +69,7 @@ def create_article(request):
 
     try:
         with transaction.atomic():
-            article = Article(article_id=id, title=title, text=text, namespace=namespace)
+            article = DbArticle(article_id=id, title=title, text=text, namespace=namespace)
             article.full_clean()
             article.save()
             validateUnique(namespace, id)
@@ -69,19 +80,16 @@ def create_article(request):
             "reason": "ID or title are already taken.",
         })
 
-    return JsonResponse({
-        "success": True,
-    })
+    return JsonResponse(serialize_article_and_permissions(article, permissions))
 
 @csrf_exempt
 def change_article(request):
-    namespace = request.POST["namespace"]
-    title = request.POST["title"]
-    new_namespace = request.POST["namespace"]
+    locator = LocatorSerializationService.deserialize(request.POST["locator"])
+    new_namespace = request.POST["new_namespace"]
     new_id = parseId(request.POST["new_id"])
     new_title = request.POST["new_title"]
     new_text = request.POST["new_text"]
-    permissions = get_permissions(request.user, namespace)
+    permissions = get_permissions(request.user, locator.getNamespace())
 
     if permissions != "full":
         return JsonResponse({
@@ -90,17 +98,16 @@ def change_article(request):
         })
 
 
-    if not Article.objects.filter(namespace=namespace, title=title).exists():
-        return error_json_response("Article with this ID does not exist")
-
+    article = None
     try:
         with transaction.atomic():
-            Article.objects.filter(namespace=namespace, title=title).update(
-                article_id=new_id,
-                namespace=new_namespace,
-                title=new_title,
-                text=new_text,
-                last_modified_at=timezone.now())
+            article = DbArticle.objects.get(filter_by_locator(locator))
+            article.namespace = new_namespace
+            article.article_id = new_id
+            article.title = new_title
+            article.text = new_text
+            article.full_clean()
+            article.save()
             validateUnique(new_namespace, new_id)
             validateUnique(new_namespace, new_title)
     except ArticleIntegrityException:
@@ -109,7 +116,7 @@ def change_article(request):
             "message": "ID or title are already taken.",
         })
 
-    return JsonResponse({"success": True})
+    return JsonResponse(serialize_article_and_permissions(article, permissions))
 
 def error_json_response(message):
     return JsonResponse({ "error": message })
@@ -118,7 +125,7 @@ def getPreviewsJson(user):
     return {
         "previews": [
             { "namespace": article.namespace, "id": article.article_id, "title": article.title, "preview": article.text[:200] }
-            for article in Article.objects.all()
+            for article in DbArticle.objects.all()
             if get_permissions(user, article.namespace) in ["full", "readonly"]
         ]
     }
@@ -127,7 +134,7 @@ def validateUnique(namespace, name):
     if name is None:
         return
 
-    if Article.objects.filter(Q(namespace=namespace, article_id=name) | Q(namespace=namespace, title=name)).count() > 1:
+    if DbArticle.objects.filter(Q(namespace=namespace, article_id=name) | Q(namespace=namespace, title=name)).count() > 1:
         raise ArticleIntegrityException("name " + name + " is not unique")
 
 def parseId(string):
