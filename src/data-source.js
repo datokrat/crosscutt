@@ -87,10 +87,10 @@ export class RemoteDataSource {
       "locator",
       LocatorSerializationService.serialize(article.getTitleBasedLocator())
     );
-    params.append("new_namespace", updatedData.get("namespace"));
-    params.append("new_id", updatedData.get("id") || "");
-    params.append("new_title", updatedData.get("title"));
-    params.append("new_text", updatedData.get("text"));
+    params.append(
+      "new_data",
+      ArticleSerializationService.serializeData(updatedData)
+    );
 
     return fetch(url, { method: "post", body: params })
       .then((response) => response.json())
@@ -100,10 +100,7 @@ export class RemoteDataSource {
   createArticle(article) {
     const url = new URL("api/create/article/", location.href);
     const params = new URLSearchParams();
-    params.append("namespace", article.get("namespace"));
-    params.append("id", article.get("id") || "");
-    params.append("title", article.get("title"));
-    params.append("text", article.get("text"));
+    params.append("data", ArticleSerializationService.serializeData(article));
 
     return fetch(url, { method: "post", body: params })
       .then((response) => response.json())

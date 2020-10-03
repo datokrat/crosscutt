@@ -111,7 +111,7 @@ export class ArticleDetailRenderer {
       "button.btn.btn-primary",
       {
         props: { type: "button", disabled: false },
-        on: { click: () => this.getModelState().save() },
+        on: { click: () => this.getModelState().create() },
       },
       ["Create"]
     );

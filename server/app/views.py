@@ -55,10 +55,11 @@ def serialize_article_and_permissions(db_article, permissions):
 
 @csrf_exempt
 def create_article(request):
-    id = parseId(request.POST["id"])
-    title = request.POST["title"]
-    text = request.POST["text"]
-    namespace = request.POST["namespace"]
+    data = ArticleSerializationService.deserializeData(request.POST["data"])
+    namespace = data.get("namespace")
+    id = data.get("id")
+    title = data.get("title")
+    text = data.get("text")
     permissions = get_permissions(request.user, namespace)
 
     if permissions != "full":
@@ -85,10 +86,7 @@ def create_article(request):
 @csrf_exempt
 def change_article(request):
     locator = LocatorSerializationService.deserialize(request.POST["locator"])
-    new_namespace = request.POST["new_namespace"]
-    new_id = parseId(request.POST["new_id"])
-    new_title = request.POST["new_title"]
-    new_text = request.POST["new_text"]
+    new_data = ArticleSerializationService.deserializeData(request.POST["new_data"])
     permissions = get_permissions(request.user, locator.getNamespace())
 
     if permissions != "full":
@@ -102,14 +100,14 @@ def change_article(request):
     try:
         with transaction.atomic():
             article = DbArticle.objects.get(filter_by_locator(locator))
-            article.namespace = new_namespace
-            article.article_id = new_id
-            article.title = new_title
-            article.text = new_text
+            article.namespace = new_data["namespace"]
+            article.article_id = new_data["id"]
+            article.title = new_data["title"]
+            article.text = new_data["text"]
             article.full_clean()
             article.save()
-            validateUnique(new_namespace, new_id)
-            validateUnique(new_namespace, new_title)
+            validateUnique(new_data["namespace"], new_data["id"])
+            validateUnique(new_data["namespace"], new_data["title"])
     except ArticleIntegrityException:
         return JsonResponse({
             "success": False,

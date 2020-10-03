@@ -3,12 +3,7 @@ import json
 
 class Article:
     def __init__(self, data, permissions):
-        self.data = {
-            "namespace": data["namespace"],
-            "id": data["id"],
-            "title": data["title"],
-            "text": data["text"],
-        }
+        self.data = ArticleSerializationService.cleanData(data)
         self.permissions = permissions
 
     def getData(self):
@@ -41,12 +36,28 @@ class ArticleSerializationService:
     def serialize(article):
         data = article.getData()
         return json.dumps({
-            "data": data,
+            "data": ArticleSerializationService.serializeData(data),
             "permissions": article.permissions,
         })
 
     @staticmethod
     def deserialize(string):
         parsed = json.loads(string)
-        return Article(parsed["data"], parsed["permissions"])
+        return Article(ArticleSerializationService.deserializeData(parsed["data"]), parsed["permissions"])
 
+    @staticmethod
+    def serializeData(data):
+        return json.dumps(ArticleSerializationService.cleanData(data))
+
+    @staticmethod
+    def deserializeData(string):
+        return ArticleSerializationService.cleanData(json.loads(string))
+
+    @staticmethod
+    def cleanData(data):
+        return {
+            "namespace": data["namespace"],
+            "id": data["id"],
+            "title": data["title"],
+            "text": data["text"],
+        }

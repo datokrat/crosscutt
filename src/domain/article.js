@@ -7,12 +7,7 @@ export class Article {
    * permissions \in { "none", "readonly", "full" }
    */
   constructor(data, permissions) {
-    this.data = Map({
-      namespace: data.get("namespace"),
-      id: data.get("id"),
-      title: data.get("title"),
-      text: data.get("text"),
-    });
+    this.data = ArticleSerializationService.cleanData(data);
     this.permissions = permissions;
   }
 
@@ -49,15 +44,34 @@ export class ForbiddenOperationException extends Error {}
 
 export class ArticleSerializationService {
   static serialize(article) {
-    const data = article.getData();
     return JSON.stringify({
-      data: data.toJS(),
+      data: ArticleSerializationService.serializeData(article.getData()),
       permissions: article.permissions,
     });
   }
 
   static deserialize(string) {
     const parsed = JSON.parse(string);
-    return new Article(Map(parsed.data), parsed.permissions);
+    return new Article(
+      ArticleSerializationService.deserializeData(parsed.data),
+      parsed.permissions
+    );
+  }
+
+  static serializeData(data) {
+    return JSON.stringify(ArticleSerializationService.cleanData(data));
+  }
+
+  static deserializeData(string) {
+    return ArticleSerializationService.cleanData(Map(JSON.parse(string)));
+  }
+
+  static cleanData(data) {
+    return Map({
+      namespace: data.get("namespace"),
+      id: data.get("id"),
+      title: data.get("title"),
+      text: data.get("text"),
+    });
   }
 }
