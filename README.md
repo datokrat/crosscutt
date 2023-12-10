@@ -4,7 +4,7 @@ WARNING: I did not maintain this repository for a while and there are security i
 
 *The ability to "write" in a medium means you can _generate_ materials and tools for others. [...] In print writing, the materials and tools you generate are rhetorical; they demonstrate and convince. In computer writing, the tools you generate are processes; they simulate and decide.* -- Alan Kay in [User Interface: A Personal View (page 5)](https://numinous.productions/ttft/assets/Kay1989.pdf)
 
-Crosscutt is the software that powers my personal blog. Here are the key facts you should know.
+Crosscutt is the software that powered my old personal blog. Here are the key facts you should know.
 
 * It is in a very early stage.
 * It runs on every server that is capable of serving static files.
