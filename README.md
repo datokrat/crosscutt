@@ -1,5 +1,7 @@
 # A medium for knowledge management and transfer (HTML5/JS/CSS only)
 
+WARNING: I did not maintain this repository for a while and there are security issues with some of its dependencies. See the "Security" tab in GitHub.
+
 *The ability to "write" in a medium means you can _generate_ materials and tools for others. [...] In print writing, the materials and tools you generate are rhetorical; they demonstrate and convince. In computer writing, the tools you generate are processes; they simulate and decide.* -- Alan Kay in [User Interface: A Personal View (page 5)](https://numinous.productions/ttft/assets/Kay1989.pdf)
 
 Crosscutt is the software that powers my personal blog. Here are the key facts you should know.
